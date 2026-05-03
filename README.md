@@ -9,3 +9,4 @@ Segmenting periodical issues into articles.
 ## Status
 
 Early. Scope, approach, and inputs/outputs are still being defined.
+project definition here: https://docs.google.com/document/d/1rT5hUJQLll-iWnLYNvf6fG5H3yTDkqTANa_h1OFiD9A/edit?tab=t.0
