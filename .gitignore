@@ -4,3 +4,7 @@ __pycache__/
 .env
 .DS_Store
 *.log
+
+# ILL log inputs and parsed outputs — contain staff identifiers; keep out of git
+ill_logs_*.csv
+*.jsonl
