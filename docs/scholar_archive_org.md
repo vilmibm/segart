@@ -1,6 +1,8 @@
 # scholar.archive.org / fatcat — what segart can use
 
-`scholar.archive.org` is the Internet Archive's full-text search index over scholarly content. Underneath it sits **fatcat**, the bibliographic database. For segart, fatcat is the canonical answer to *"what articles exist in this journal issue?"* — a second ground-truth source orthogonal to the ILL fulfillment logs.
+`scholar.archive.org` is the Internet Archive's full-text search index over scholarly content. Underneath it sits **fatcat**, the bibliographic database. **The purpose of consulting fatcat from segart is to support the article-segmentation work itself** — candidate lists, cross-references, prioritization — not to feed back into ILL. (Better segmentation may improve ILL eventually, but that is a downstream consequence; segart reads fatcat for its own segmentation pipeline.)
+
+For segart, fatcat is a strong *indicator* of which articles a given journal issue should contain — useful as a candidate set and consistency check, but not as ground truth. The bibliographic records come from upstream metadata (Crossref, PubMed, etc.) and can disagree with the actual IA scan: articles may be assigned to the wrong volume/issue, page ranges may differ, articles printed in the scan may have no fatcat record, and fatcat records may exist for articles never scanned by IA. ILL fulfillment logs remain the closer-to-ground-truth source because a human physically located the article in the IA scan; fatcat is the much-larger, lower-confidence companion signal.
 
 ## Data model (lightweight FRBR)
 
@@ -17,7 +19,7 @@ Entities cross-reference by `ident`, not revision, so metadata can evolve while 
 
 ## What segart pulls from fatcat
 
-1. **Per-issue article roster.** Given an IA periodical issue, the canonical article set is releases with matching `container_id` + `volume` + `issue`. This is the densest article-level ground truth available — most issues have a fatcat record per article from Crossref/PubMed harvests.
+1. **Per-issue candidate article list.** Given an IA periodical issue, the set of fatcat releases with matching `container_id` + `volume` + `issue` gives a dense list of articles the issue *probably* contains — most well-covered journals have a fatcat record per article from Crossref/PubMed harvests. Use it as a candidate set against which to compare segmenter output (overlaps are positive evidence; mismatches need investigation, not assumed-wrong-on-either-side).
 2. **DOI / PMID round-trip.** Lookup canonical release by DOI/PMID, recover work_id and container_id.
 3. **IA item ↔ container link.** IA SIM item IDs follow the pattern
    ```
@@ -29,7 +31,7 @@ Entities cross-reference by `ident`, not revision, so metadata can evolve while 
 
 ## What fatcat does *not* give us
 
-- **No leaf or page numbers.** `release.pages` is printed-page numbers (e.g. `"1273-1278"`), not leaf indices. Linking each release to its `start_leaf`/`stop_leaf` inside the IA scan is exactly what segart must produce. Fatcat tells us *which* articles exist; segart determines *where* in the leaf stack each lives.
+- **No leaf or page numbers.** `release.pages` is printed-page numbers (e.g. `"1273-1278"`), not leaf indices. Linking each release to its `start_leaf`/`stop_leaf` inside the IA scan is exactly what segart must produce. Fatcat suggests *which* articles to look for; segart determines *where* in the leaf stack each lives — and whether each candidate is actually present.
 - **`file.urls` is often empty.** Many IA-held files are "dark" preservation-only and carry no public URLs in the fatcat record. The archive.org link rendered on scholar work pages is constructed at render time from container + release metadata, not stored on the file.
 - **Patchy ext_id coverage.** Pre-1970 and many non-English titles lack DOIs. ILL log → fatcat matching has to fall back to fuzzy title + container + volume/issue/year matching when no DOI is present.
 
@@ -73,4 +75,4 @@ NEJM 1961-12-28, vol 265, issue 26, page 1273 — the example from the project d
 | DOI | `10.1056/nejm196112282652601` |
 | PMID | `14462856` |
 
-Segart's job: produce a TOC entry for this IA item that pairs `release dtoonyptt5d2layb4nlokwk6he` (or the bibliographic tuple) with leaves `n26`–`n31`. The ILL log gives one such ground-truth pair; fatcat gives the full expected article list for the issue.
+Segart's job: produce a TOC entry for this IA item that pairs `release dtoonyptt5d2layb4nlokwk6he` (or the bibliographic tuple) with leaves `n26`–`n31`. The ILL log gives one such ground-truth pair; fatcat gives a dense candidate list of other articles the same issue is likely to contain, against which the segmenter's output can be checked.
