@@ -4,9 +4,10 @@
 Downloads (or reads) the latest fatcat container_export.json.gz and emits
 JSONL — one line per SIM-bearing container — keyed by ISSN-L.
 
-This is segart's "scope set": the fatcat-addressable subset of IA's
-periodical catalog. Containers without an IA SIM `sim_pubid` are dropped
-because fatcat can't supply candidate article lists for them.
+This is the SIM (microfilm) slice specifically. SIM is one of several IA
+source collections backing periodicals; for the full segart scope, see
+`match_pub_to_fatcat.py`, which joins IA pub_* collections to fatcat
+containers across all sources.
 
 Source: https://archive.org/details/fatcat_snapshots_and_exports
         (fatcat_bulk_exports_<date>/container_export.json.gz, ~25 MB)

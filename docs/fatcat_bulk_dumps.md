@@ -29,11 +29,11 @@ The 2024-02-18 bulk export contains:
 
 - 199,060 total fatcat containers
 - 193,416 (97%) carry an ISSN-L
-- **11,424 carry `extra.ia.sim.sim_pubid`** — the universe segart can leverage fatcat for. The project doc cites ~27,000 IA periodical titles, so fatcat covers roughly **40%** of IA's periodical catalog with article-level metadata. The remaining ~60% segart will need to handle from OCR alone, without a fatcat candidate list.
+- 11,424 carry `extra.ia.sim.sim_pubid` — the subset with IA microfilm coverage specifically. SIM is just one of many IA source collections backing periodicals; the actual segart-addressable scope is the union of IA's ~28,002 `pub_*` collections (across SIM, donor scans, partner libraries, NOAA, university microfilm, etc.), not the SIM slice alone. Use `match_pub_to_fatcat.py` to compute the real fatcat-coverage rate against the pub_* universe — currently ~59% of pub_* collections have a discoverable fatcat container; see `docs/pub_fatcat_matching.md`.
 
 ## Recommended workflow for segart
 
-1. **Always pull `container_export.json.gz` first** — 25 MB, trivial to refresh. Use `build_sim_container_index.py` to filter to the ~11,424 SIM-bearing containers and emit a compact JSONL keyed by ISSN-L. That's segart's fatcat-addressable scope.
+1. **Always pull `container_export.json.gz` first** — 25 MB, trivial to refresh. `build_sim_container_index.py` extracts the SIM-bearing slice (one source); `match_pub_to_fatcat.py` is the better entry point for full segart scope, joining IA `pub_*` collections to fatcat containers across all sources.
 2. **Stream-process `release_export_expanded.json.gz`** through `zcat | jq` or Python. Filter on `container.ident ∈ SIM-bearing set`, project to a small per-record schema, and emit a per-issue index keyed by `(container_id, volume, issue, year)`. This collapses 232 GB into something segart code can mmap.
 3. **Use `release_extid.tsv.gz`** for fast DOI ↔ `release_ident` joins during evaluation.
 4. **Optionally pull `file_export.json.gz`** if we want to know which releases already have IA-archived PDFs (vs. which only exist as bibliographic stubs).
