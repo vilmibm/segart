@@ -34,11 +34,33 @@ def normalize_title(s):
     return " ".join(w for w in s.split() if w not in STOPWORDS)
 
 
-def title_match(a, b, threshold=0.85):
+def title_match(a, b, threshold=0.85, prefix_min_words=4, contains_min_words=5):
+    """Compare two titles after normalization.
+
+    True if any of:
+      - normalized strings are equal
+      - one starts with the other AND the shorter has ≥prefix_min_words
+        meaningful words (handles ILL anchors that append section context
+        like "...: Termination and group therapy" to article titles)
+      - the shorter is contained as a contiguous substring inside the
+        longer AND the shorter has ≥contains_min_words words (handles
+        segmenter outputs that concatenate section header + article
+        title, e.g. "ESSAYS The Nursing-Medicine Relationship Beyond
+        Florence Nightingale ...")
+      - SequenceMatcher ratio ≥ threshold
+    """
     na, nb = normalize_title(a), normalize_title(b)
     if not na or not nb:
         return False
     if na == nb:
+        return True
+    short, long_ = (na, nb) if len(na) <= len(nb) else (nb, na)
+    if long_.startswith(short + " ") and len(short.split()) >= prefix_min_words:
+        return True
+    if (
+        len(short.split()) >= contains_min_words
+        and (f" {short} " in f" {long_} " or long_.endswith(" " + short))
+    ):
         return True
     return SequenceMatcher(None, na, nb).ratio() >= threshold
 
@@ -90,32 +112,112 @@ def author_match(anchor_author, toc_authors):
     return False
 
 
+import re as _re
+
+
+def _leaf_int(s):
+    if not isinstance(s, str):
+        return None
+    m = _re.match(r"n(\d+)$", s)
+    return int(m.group(1)) if m else None
+
+
 def leaves_match(anchor_ranges, toc_ranges):
+    """Strict: exact equality on the first range pair."""
     if not anchor_ranges or not toc_ranges:
         return False
     return list(anchor_ranges[0]) == list(toc_ranges[0])
 
 
-def find_hit(anchor, entries):
+def leaves_match_soft(anchor_ranges, toc_ranges, start_tol=1, end_tol=3):
+    """Soft: start leaves within ±start_tol AND end leaves within ±end_tol.
+
+    Why end_tol > start_tol: the segmenter's article-end boundary is
+    "next-article-start − 1", which is correct in spirit but often offset
+    by a few leaves when ads or back-matter sit between articles. Article
+    starts are sharper, so we hold them to a tighter tolerance.
+    """
+    if not anchor_ranges or not toc_ranges:
+        return False
+    a0 = anchor_ranges[0]
+    t0 = toc_ranges[0]
+    a_s, a_e = _leaf_int(a0[0]), _leaf_int(a0[-1])
+    t_s, t_e = _leaf_int(t0[0]), _leaf_int(t0[-1])
+    if a_s is None or t_s is None:
+        return False
+    if abs(a_s - t_s) > start_tol:
+        return False
+    if a_e is not None and t_e is not None and abs(a_e - t_e) > end_tol:
+        return False
+    return True
+
+
+def find_hit(anchor, entries, start_tol=1, end_tol=3):
+    """Pick the best entry for `anchor`.
+
+    Preference order:
+      1. exact leaves + title + author  (`exact` hit)
+      2. soft leaves + title + author   (`soft` hit — start within ±1)
+      3. exact-leaves entry, even if title/author miss  (segmenter put a
+         wrong title at the right place — useful diagnostic)
+      4. content-only match: title + author match an entry whose leaves
+         are off (segmenter found the article but on the wrong page)
+      5. nothing                                     (`miss`)
+    """
     a_leaves = anchor["leaf_ranges"]
     a_title = anchor.get("article_title")
     a_author = anchor.get("article_author")
-    candidates = [
-        e for e in entries if leaves_match(a_leaves, e.get("leaf_ranges"))
+
+    exact = [e for e in entries if leaves_match(a_leaves, e.get("leaf_ranges"))]
+    soft = [
+        e for e in entries
+        if leaves_match_soft(a_leaves, e.get("leaf_ranges"), start_tol, end_tol)
     ]
-    for e in candidates:
-        t = title_match(a_title, e.get("title"))
-        au = author_match(a_author, e.get("authors"))
-        if t and au:
-            return e, {"leaves": True, "title": True, "author": True}
-    if candidates:
-        e = candidates[0]
+
+    for e in exact:
+        if title_match(a_title, e.get("title")) and author_match(a_author, e.get("authors")):
+            return e, {
+                "match": "exact",
+                "leaves_strict": True,
+                "leaves_soft": True,
+                "title": True,
+                "author": True,
+            }
+    for e in soft:
+        if title_match(a_title, e.get("title")) and author_match(a_author, e.get("authors")):
+            return e, {
+                "match": "soft",
+                "leaves_strict": leaves_match(a_leaves, e.get("leaf_ranges")),
+                "leaves_soft": True,
+                "title": True,
+                "author": True,
+            }
+    if exact:
+        e = exact[0]
         return e, {
-            "leaves": True,
+            "match": "leaves_only",
+            "leaves_strict": True,
+            "leaves_soft": True,
             "title": title_match(a_title, e.get("title")),
             "author": author_match(a_author, e.get("authors")),
         }
-    return None, {"leaves": False, "title": False, "author": False}
+    # Content-only fallback: scan all entries
+    for e in entries:
+        if title_match(a_title, e.get("title")) and author_match(a_author, e.get("authors")):
+            return e, {
+                "match": "content_only",
+                "leaves_strict": False,
+                "leaves_soft": False,
+                "title": True,
+                "author": True,
+            }
+    return None, {
+        "match": "miss",
+        "leaves_strict": False,
+        "leaves_soft": False,
+        "title": False,
+        "author": False,
+    }
 
 
 def score_toc(corpus_anchors, toc):
@@ -131,9 +233,11 @@ def score_toc(corpus_anchors, toc):
                 "anchor_author": anchor.get("article_author"),
                 "anchor_leaves": anchor.get("leaf_ranges"),
                 "matched_entry_title": hit.get("title") if hit else None,
+                "matched_entry_leaves": hit.get("leaf_ranges") if hit else None,
                 "matched_entry_id": hit.get("id") if hit else None,
                 "reasons": reasons,
-                "full_hit": all(reasons.values()),
+                "match": reasons["match"],
+                "full_hit": reasons["match"] in ("exact", "soft"),
             }
         )
     return out
@@ -173,11 +277,15 @@ def main():
 
     fout = open(args.output, "w") if args.output else sys.stdout
     n_anchors = 0
-    counts = {"full": 0, "leaves": 0, "title": 0, "author": 0}
+    n_entries_total = 0
+    n_entries_matched = 0
+    match_counts = {"exact": 0, "soft": 0, "leaves_only": 0, "content_only": 0, "miss": 0}
+    field_counts = {"leaves_strict": 0, "leaves_soft": 0, "title": 0, "author": 0}
     for path in toc_paths:
         with open(path) as f:
             toc = json.load(f)
         item = toc.get("item")
+        n_entries_total += len(toc.get("entries") or [])
         anchors = corpus.get(item, [])
         if not anchors:
             print(
@@ -185,24 +293,41 @@ def main():
                 file=sys.stderr,
             )
             continue
+        matched_ids = set()
         for r in score_toc(anchors, toc):
             n_anchors += 1
-            if r["full_hit"]:
-                counts["full"] += 1
-            for k in ("leaves", "title", "author"):
-                if r["reasons"][k]:
-                    counts[k] += 1
+            match_counts[r["match"]] += 1
+            for k in field_counts:
+                if r["reasons"].get(k):
+                    field_counts[k] += 1
+            if r["matched_entry_id"] and r["match"] in ("exact", "soft", "content_only"):
+                matched_ids.add(r["matched_entry_id"])
             fout.write(json.dumps(r, ensure_ascii=False) + "\n")
+        n_entries_matched += len(matched_ids)
 
     if args.output:
         fout.close()
     if n_anchors:
         pct = lambda n: f"{n}/{n_anchors} ({n * 100 // n_anchors}%)"
-        print(f"\nscored {n_anchors} anchors", file=sys.stderr)
-        print(f"  full hit:  {pct(counts['full'])}", file=sys.stderr)
-        print(f"  leaves:    {pct(counts['leaves'])}", file=sys.stderr)
-        print(f"  title:     {pct(counts['title'])}", file=sys.stderr)
-        print(f"  author:    {pct(counts['author'])}", file=sys.stderr)
+        full_n = match_counts["exact"] + match_counts["soft"]
+        print(f"\nscored {n_anchors} anchors over {n_entries_total} TOC entries", file=sys.stderr)
+        print(f"  hit (exact|soft):       {pct(full_n)}", file=sys.stderr)
+        print(f"    exact leaves:         {match_counts['exact']}", file=sys.stderr)
+        print(f"    soft leaves (±1):     {match_counts['soft']}", file=sys.stderr)
+        print(f"  leaves-only (no content): {match_counts['leaves_only']}", file=sys.stderr)
+        print(f"  content-only (wrong leaf): {match_counts['content_only']}", file=sys.stderr)
+        print(f"  miss:                   {match_counts['miss']}", file=sys.stderr)
+        print(f"  field hits:", file=sys.stderr)
+        print(f"    leaves_strict: {pct(field_counts['leaves_strict'])}", file=sys.stderr)
+        print(f"    leaves_soft:   {pct(field_counts['leaves_soft'])}", file=sys.stderr)
+        print(f"    title:         {pct(field_counts['title'])}", file=sys.stderr)
+        print(f"    author:        {pct(field_counts['author'])}", file=sys.stderr)
+        if n_entries_total:
+            print(
+                f"  TOC entries matched ≥1 anchor: {n_entries_matched}/{n_entries_total} "
+                f"({n_entries_matched * 100 // n_entries_total}%)",
+                file=sys.stderr,
+            )
     else:
         print("no anchors scored", file=sys.stderr)
 

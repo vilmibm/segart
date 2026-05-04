@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def list_monthly_items(months=None):
@@ -84,6 +85,10 @@ def main():
         nargs="+",
         help="Restrict to specific YYYY-MM values; default = all",
     )
+    p.add_argument(
+        "--concurrency", type=int, default=3,
+        help="Max concurrent ia download calls (default 3; keep ≤3 per RAM note)",
+    )
     args = p.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -91,12 +96,16 @@ def main():
     print(f"{len(items)} monthly items", file=sys.stderr)
 
     failed = []
-    for i, item in enumerate(items, 1):
-        ident, rc, err = download_item(item, args.output_dir)
-        marker = "ok" if rc == 0 else f"ERR rc={rc}"
-        print(f"  [{i}/{len(items)}] {ident}: {marker}", file=sys.stderr)
-        if rc != 0:
-            failed.append((ident, err.strip().splitlines()[-1] if err else ""))
+    done = 0
+    with ThreadPoolExecutor(max_workers=args.concurrency) as ex:
+        futures = {ex.submit(download_item, item, args.output_dir): item for item in items}
+        for fut in as_completed(futures):
+            done += 1
+            ident, rc, err = fut.result()
+            marker = "ok" if rc == 0 else f"ERR rc={rc}"
+            print(f"  [{done}/{len(items)}] {ident}: {marker}", file=sys.stderr, flush=True)
+            if rc != 0:
+                failed.append((ident, err.strip().splitlines()[-1] if err else ""))
 
     moved = flatten(args.output_dir)
     print(

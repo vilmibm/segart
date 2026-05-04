@@ -42,6 +42,39 @@ def normalize(s):
     return s if s else None
 
 
+def _looks_like_leaf(s):
+    return isinstance(s, str) and s.startswith("n") and s[1:].isdigit()
+
+
+def _pick_leaf_arrays(ff):
+    """Return (starts, stops) preferring `normalized_orig_*` when the raw
+    `start`/`stop` arrays contain entries without the `n` prefix.
+
+    Some logs record bare printed page numbers in `start`/`stop` (e.g.
+    `"9"`); the `normalized_orig_*` fields contain the staffer-corrected
+    leaf strings (`"n20"`). We pick whichever pair is fully leaf-shaped.
+    """
+    raw_s = ff.get("start") or []
+    raw_e = ff.get("stop") or []
+    norm_s = ff.get("normalized_orig_start") or []
+    norm_e = ff.get("normalized_orig_stop") or []
+    raw_clean = (
+        raw_s and len(raw_s) == len(raw_e)
+        and all(_looks_like_leaf(x) for x in raw_s)
+        and all(_looks_like_leaf(x) for x in raw_e)
+    )
+    norm_clean = (
+        norm_s and len(norm_s) == len(norm_e)
+        and all(_looks_like_leaf(x) for x in norm_s)
+        and all(_looks_like_leaf(x) for x in norm_e)
+    )
+    if raw_clean:
+        return raw_s, raw_e
+    if norm_clean:
+        return norm_s, norm_e
+    return raw_s or norm_s, raw_e or norm_e
+
+
 def parse_ill_row(row):
     try:
         ff = json.loads(row["full_form"])
@@ -50,8 +83,7 @@ def parse_ill_row(row):
     identifier = ff.get("identifier") or row.get("source_identifier")
     if not identifier:
         return None
-    starts = ff.get("start") or ff.get("normalized_orig_start") or []
-    stops = ff.get("stop") or ff.get("normalized_orig_stop") or []
+    starts, stops = _pick_leaf_arrays(ff)
     if not starts or len(starts) != len(stops):
         return None
     params = ff.get("original_request_params") or {}

@@ -29,11 +29,15 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.3-docling"
+SEGMENTER_VERSION = "0.5-docling"
 
+# Academic / clinical credentials that often follow a byline. `Dr.` was
+# previously here but matched any sentence starting "Dr. Smith said ..."
+# in body text, so it caused frequent false-positive byline matches; we
+# rely on the explicit name-shape patterns below to catch "Dr. <Name>".
 CRED_RE = re.compile(
     r"\b(?:M\.?\s*D\.?|Ph\.?\s*D\.?|MA|MS|MPH|MSc|R\.?\s*N\.?|D\.?\s*O\.?|RD|"
-    r"PhD|Sc\.?\s*D\.?|Dr\.?|Jr\.?|Sr\.?|II|III|FRCP|FRCS|FACP|MHA|EdD|DSc)"
+    r"PhD|Sc\.?\s*D\.?|Jr\.?|Sr\.?|II|III|FRCP|FRCS|FACP|MHA|EdD|DSc)"
     r"\.?\b",
     re.IGNORECASE,
 )
@@ -124,6 +128,13 @@ NAME_SHAPE_RES = [
     re.compile(r"\b[A-Z]{2,}\s+[A-Z]\.?\s*[A-Z]{2,}\b"),
     re.compile(r"\b[A-Z][a-z]+,\s+[A-Z](?:\s|\.|$)"),
     re.compile(r"\b[A-Z]{2,},\s+[A-Z](?:\s|\.|$)"),
+    # Two adjacent capitalized words at the START of the byline string
+    # ("Sue Buckley", "Anthony Joyce"). Anchored at ^ so coincidental
+    # mentions of 'Duke University' or 'New York' inside body text
+    # don't trigger.
+    re.compile(r"^[A-Z][a-z]+\s+[A-Z][a-z]+\b"),
+    # OCR-tolerant variant ("Anthony 5. Joyce" where '5' was 'S').
+    re.compile(r"^[A-Z][a-z]+\s+\S{1,4}\s+[A-Z][a-z]+\b"),
 ]
 
 
@@ -154,21 +165,39 @@ SUBSECTION_DENYLIST = {
     re.sub(r"\s+", " ", s).lower()
     for s in [
         "methods", "method", "materials and methods",
-        "results", "result", "findings",
+        "results", "result", "findings", "results in children",
         "discussion", "conclusion", "conclusions",
         "introduction", "background", "summary",
         "abstract",
-        "references", "bibliography", "acknowledgments", "acknowledgements",
+        "references", "bibliography",
+        "acknowledgments", "acknowledgements", "acknowledgment", "acknowledgement",
         "appendix", "appendices",
         "tables", "figures",
         "subject index", "author index", "index of authors",
         "index of first authors or sources",
         "index of authors or sources-continued from page iv",
         "table of contents", "contents",
+        # drug-ad inserts: titles printed in the leading slot of an ad
+        "precautions", "adverse reactions", "dosage and administration",
+        "contraindications", "indications", "warnings",
+        "how supplied", "prescribing information",
+        # generic journal section labels
+        "communications", "letters to the editor", "letters", "correspondence",
+        "editorial", "editorials", "errata", "erratum",
+        "in this issue", "from the editor", "editor's note",
+        "book reviews", "book review", "publications received",
+        "address changes", "address correction", "subscriptions",
+        "announcements", "notices", "calendar",
+        "articles", "research articles", "original articles", "invited articles",
+        "features", "departments", "news", "abstracts",
+        "acknowledgment of reviewers", "past editors",
     ]
 }
-# Also reject pure "Table N", "Figure N" headers
-TABLE_FIGURE_RE = re.compile(r"^(table|figure|fig\.?)\s*\d+", re.IGNORECASE)
+# Also reject pure "Table N", "Figure N" headers (digits or Roman numerals).
+TABLE_FIGURE_RE = re.compile(
+    r"^(table|figure|fig\.?)\s*(\d+|[ivxlc]+)\b",
+    re.IGNORECASE,
+)
 
 
 def parse_authors(text):
@@ -184,17 +213,73 @@ def parse_authors(text):
     return out
 
 
-def detect_articles(doc):
+# Labels docling assigns to the title-shaped blocks at article starts.
+# `section_header` is the dominant signal; `title` shows up on cover-style
+# pages. `paragraph_header` is excluded from STARTERS — it commonly tags
+# within-article subsections (Methods, Results, History, Background ...)
+# and was responsible for the v0.5-pre-fix "two articles per Pounds page"
+# duplicate where docling labeled the in-article 'History of Nursing
+# Education' as paragraph_header. We still allow paragraph_header to
+# CONTINUE a stack (so multi-line subtitles still merge) but not to start.
+ARTICLE_START_LABELS = ("section_header", "title")
+HEADER_LABELS = ("section_header", "title", "paragraph_header")
+
+
+def _y_top(t):
+    """Top y of a text item (Docling y is bottom-up)."""
+    bb = bbox_of(t) or (0, 0, 0, 0)
+    return bb[1] or 0
+
+
+def _merge_stacked_headers(ordered, header_idx, max_gap_y=80):
+    """Walk down from `header_idx`, gathering subsequent header items that
+    sit immediately below (small y-gap) — these are line continuations of
+    a multi-line title. Returns the merged title text.
+
+    Why: docling sometimes emits a single article title as 2-3 separate
+    section_header items (one per visual line). Without merging we keep
+    only the last line — e.g. "A Reformed Curriculum at the / University
+    of Michigan: The / Michigan Program" becomes just "Michigan Program".
+    """
+    parts = [(ordered[header_idx].text or "").strip()]
+    i = header_idx + 1
+    last_y = _y_top(ordered[header_idx])
+    while i < len(ordered):
+        t = ordered[i]
+        if text_label(t) not in HEADER_LABELS:
+            break
+        y = _y_top(t)
+        # Docling y is bottom-up; the next visual line has a SMALLER y.
+        gap = abs(last_y - y)
+        if gap > max_gap_y:
+            break
+        parts.append((t.text or "").strip())
+        last_y = y
+        i += 1
+    return " ".join(p for p in parts if p), i - 1  # last merged idx
+
+
+def detect_articles(doc, raw=None):
     """Walk pages top-down and emit article starts.
 
-    Article-start rule (v0.3.1): a `section_header` is treated as an
-    article title only if it is immediately followed (within a few
-    items) by a byline-shaped text block. Subsection headers within an
-    article (Findings, Methods, Discussion, ...) don't have bylines
-    under them and are dropped. Section/category headers (ESSAYS,
-    RESEARCH REPORTS) sit *above* the article title; in that case the
-    article title is the section_header closest to (immediately above)
-    the byline.
+    Article-start rule (v0.5):
+      - A header item (section_header, title, paragraph_header) acts as
+        a title candidate. Stacked consecutive headers with a small
+        y-gap are merged into one multi-line title.
+      - When a byline-shaped text item follows under the current header
+        chunk, emit (chunk, byline) as an article start, then RESET the
+        chunk so the next header on the same page can spawn another
+        article. This handles multi-article pages (Letters, Brief
+        Communications, Screening Guidelines, ...).
+      - Subsection headers (Methods, Results, ADVERSE REACTIONS, ...)
+        are filtered via SUBSECTION_DENYLIST.
+      - Category headers (ESSAYS, RESEARCH REPORTS) sit above the
+        title; the per-page reset means we only emit when we've
+        actually seen a byline, so a lone category header is dropped.
+
+    `raw` (optional list) — when provided, every kept candidate is
+    appended in order, including the byline_text it was emitted for,
+    for post-hoc debugging without re-running docling.
     """
     page_texts = {}
     for t in doc.texts:
@@ -203,59 +288,75 @@ def detect_articles(doc):
             continue
         page_texts.setdefault(p, []).append(t)
 
-    def y_of(t):
-        bb = bbox_of(t) or (0, 0, 0, 0)
-        # Docling y is bottom-up; invert so higher-on-page comes first.
-        return -(bb[1] or 0)
+    def y_sort(t):
+        return -_y_top(t)
 
     article_starts = []
     seen_titles = set()
-    for p in sorted(page_texts):
-        ordered = sorted(page_texts[p], key=y_of)
-        # Walk top-down looking for a byline; the article title is the
-        # section_header most-recently seen above it.
-        last_section_header_idx = None
-        byline_idx = None
-        for i, t in enumerate(ordered):
-            label = text_label(t)
-            if label == "section_header":
-                last_section_header_idx = i
-            elif label == "text" and last_section_header_idx is not None:
-                txt = (t.text or "").strip()
-                if looks_like_byline(txt):
-                    byline_idx = i
-                    break
 
-        if byline_idx is None or last_section_header_idx is None:
-            continue
-        sh = ordered[last_section_header_idx]
-        title = (sh.text or "").strip()
+    def _emit(p, title, byline_text, header_start_idx, ordered):
+        """Apply per-candidate filters; append to article_starts/raw if kept."""
         if not title or len(title) < 5:
-            continue
-        # Skip duplicates (same title detected on multiple pages)
+            return
         ttl_norm = re.sub(r"\s+", " ", title.lower())
         if ttl_norm in seen_titles:
-            continue
-        # Reject in-article subsection headers
+            return
         if ttl_norm in SUBSECTION_DENYLIST:
-            continue
+            return
         if TABLE_FIGURE_RE.match(title):
-            continue
-        seen_titles.add(ttl_norm)
-
-        # Reject the header is followed by ad order-form widgets nearby
-        nearby = ordered[last_section_header_idx: last_section_header_idx + 8]
+            return
+        # Reject if the header is followed by ad order-form widgets nearby.
+        nearby = ordered[header_start_idx: header_start_idx + 8]
         if sum(1 for t in nearby if text_label(t) in (
             "checkbox_unselected", "checkbox_selected"
         )) >= 2:
-            continue
-
-        authors = parse_authors((ordered[byline_idx].text or "").strip())
-        article_starts.append({
+            return
+        seen_titles.add(ttl_norm)
+        rec = {
             "page": p,
             "title": title,
-            "authors": authors,
-        })
+            "authors": parse_authors(byline_text),
+            "byline_text": byline_text,
+        }
+        article_starts.append(rec)
+        if raw is not None:
+            raw.append({**rec, "kept": True})
+
+    for p in sorted(page_texts):
+        ordered = sorted(page_texts[p], key=y_sort)
+        # Walk top-down. Maintain "current header chunk" (most recent
+        # merged headers above the cursor with no intervening text). When
+        # we hit a byline-shaped text item, emit (chunk, byline) as an
+        # article start AND reset the chunk so the next header on this
+        # page can spawn a second article. This is what lets us pick up
+        # multiple short articles on a page (Letters, Brief
+        # Communications, Screening Guidelines, ...).
+        cur_header_start = None
+        cur_header_text = None
+        cur_header_is_starter = False
+        i = 0
+        while i < len(ordered):
+            t = ordered[i]
+            label = text_label(t)
+            if label in HEADER_LABELS:
+                merged, end_idx = _merge_stacked_headers(ordered, i)
+                cur_header_start = i
+                cur_header_text = merged
+                cur_header_is_starter = label in ARTICLE_START_LABELS
+                i = end_idx + 1
+                continue
+            if (
+                label == "text"
+                and cur_header_start is not None
+                and cur_header_is_starter
+            ):
+                txt = (t.text or "").strip()
+                if looks_like_byline(txt):
+                    _emit(p, cur_header_text or "", txt, cur_header_start, ordered)
+                    cur_header_start = None
+                    cur_header_text = None
+                    cur_header_is_starter = False
+            i += 1
     return article_starts
 
 
@@ -274,6 +375,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("item", help="IA item identifier")
     p.add_argument("-o", "--output", help="Output path (default <item>_toc.json)")
+    p.add_argument("--raw-output", help="Also dump raw candidates as JSON "
+                                        "(default <output>.raw.json)")
     p.add_argument("--cache-dir", default=str(CACHE))
     p.add_argument("--verbose", "-v", action="store_true")
     args = p.parse_args()
@@ -290,7 +393,8 @@ def main():
     doc = docling_convert(pdf)
     print(f"  conversion took {time.time() - t0:.1f}s", file=sys.stderr)
 
-    starts = detect_articles(doc)
+    raw = []
+    starts = detect_articles(doc, raw=raw)
     if args.verbose:
         for s in starts:
             print(
@@ -339,6 +443,19 @@ def main():
     with open(out, "w") as f:
         json.dump(toc, f, indent=2)
     print(f"  wrote {out}: {len(entries)} entries", file=sys.stderr)
+
+    raw_out = args.raw_output or (
+        out.replace("_toc.json", "_raw.json")
+        if out.endswith("_toc.json") else f"{out}.raw.json"
+    )
+    with open(raw_out, "w") as f:
+        json.dump({
+            "item": args.item,
+            "leaf_count": leaf_count,
+            "generator_version": SEGMENTER_VERSION,
+            "raw_candidates": raw,
+        }, f, indent=2)
+    print(f"  wrote {raw_out}: {len(raw)} raw candidates", file=sys.stderr)
 
 
 if __name__ == "__main__":
