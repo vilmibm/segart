@@ -112,21 +112,63 @@ def bbox_of(t):
     return None
 
 
+# Explicit name-shape patterns. A line is byline-shaped if it contains at
+# least one of these:
+#   - "First M. Surname" or "FIRST M. SURNAME"   ("Lois A. Pounds")
+#   - "Surname, F."                              ("Pounds, L A")
+#   - "First Surname"  (two adjacent capitalized name-shape words, both ≥3
+#     letters and not common English nouns) — looser; usually paired with
+#     credentials elsewhere on the line
+NAME_SHAPE_RES = [
+    re.compile(r"\b[A-Z][a-z]+\s+[A-Z]\.\s*[A-Z][a-z]+\b"),
+    re.compile(r"\b[A-Z]{2,}\s+[A-Z]\.?\s*[A-Z]{2,}\b"),
+    re.compile(r"\b[A-Z][a-z]+,\s+[A-Z](?:\s|\.|$)"),
+    re.compile(r"\b[A-Z]{2,},\s+[A-Z](?:\s|\.|$)"),
+]
+
+
 def looks_like_byline(text):
-    """Return True if `text` plausibly is an author byline."""
+    """Return True if `text` plausibly is an author byline.
+
+    Tighter rule (v0.3.2): require an explicit credential
+    (M.D./Ph.D./R.N./...) or a recognized name-shape pattern, or a `by `
+    prefix. Subtitles and abstract intros that happen to be title-cased no
+    longer pass — those don't have name shapes.
+    """
     if not text or len(text) < 3 or len(text) > 300:
         return False
-    # Strip leading "by " if present
     body = re.sub(r"^by\s+", "", text, flags=re.IGNORECASE).strip()
-    # Has at least one credential or all-caps name pattern
-    has_cred = bool(CRED_RE.search(body))
-    # Names are capitalized words; check fraction
-    words = re.findall(r"[A-Za-z][A-Za-z'\-]+", body)
-    if not words:
-        return False
-    caps = sum(1 for w in words if w[0].isupper() or w.isupper())
-    name_ratio = caps / len(words)
-    return has_cred or (name_ratio >= 0.7 and 2 <= len(words) <= 30)
+    if body != text.strip():
+        return True  # had explicit "by " prefix → trust it
+    if CRED_RE.search(body):
+        return True
+    for r in NAME_SHAPE_RES:
+        if r.search(body):
+            return True
+    return False
+
+
+# Section-header texts that are NEVER article starts — they are subsection
+# headers within an article, end-of-issue indices, or article apparatus.
+SUBSECTION_DENYLIST = {
+    re.sub(r"\s+", " ", s).lower()
+    for s in [
+        "methods", "method", "materials and methods",
+        "results", "result", "findings",
+        "discussion", "conclusion", "conclusions",
+        "introduction", "background", "summary",
+        "abstract",
+        "references", "bibliography", "acknowledgments", "acknowledgements",
+        "appendix", "appendices",
+        "tables", "figures",
+        "subject index", "author index", "index of authors",
+        "index of first authors or sources",
+        "index of authors or sources-continued from page iv",
+        "table of contents", "contents",
+    ]
+}
+# Also reject pure "Table N", "Figure N" headers
+TABLE_FIGURE_RE = re.compile(r"^(table|figure|fig\.?)\s*\d+", re.IGNORECASE)
 
 
 def parse_authors(text):
@@ -193,6 +235,11 @@ def detect_articles(doc):
         # Skip duplicates (same title detected on multiple pages)
         ttl_norm = re.sub(r"\s+", " ", title.lower())
         if ttl_norm in seen_titles:
+            continue
+        # Reject in-article subsection headers
+        if ttl_norm in SUBSECTION_DENYLIST:
+            continue
+        if TABLE_FIGURE_RE.match(title):
             continue
         seen_titles.add(ttl_norm)
 
