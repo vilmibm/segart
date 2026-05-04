@@ -1,5 +1,91 @@
 # IA periodical publishers by issue volume
 
+## TL;DR — periodicals-only ranking (for project ordering)
+
+Restricting to pub_* collections that carry `collection:periodicals` (27,552 of 28,002 pubs, 2,254,664 issues). This excludes the ECCO/EEBO book dumps that dominated the raw view but keeps newspapers and government documents (since both are *periodically issued*, just with different segmentation profiles than scholarly journals).
+
+### Top 30 publishers — periodicals only
+
+| rank | pubs | issues | publisher |
+|---:|---:|---:|---|
+| 1 | 729 | 136,235 | Open Court Publishing Co [^1] |
+| 2 | 1,185 | 92,767 | ELSEVIER LTD. |
+| 3 | 202 | 63,324 | Superintendent of Government Documents |
+| 4 | 1 | 32,566 | Constitution Pub. Co. (Atlanta Constitution newspaper) |
+| 5 | 137 | 31,145 | Out-of-copyright |
+| 6 | 1 | 30,672 | Federal Information & News Dispatch, Inc. (Federal Register) |
+| 7 | 689 | 28,432 | Springer Science & Business Media |
+| 8 | 62 | 21,774 | Penton Media, Inc. |
+| 9 | 7 | 18,389 | McGraw Hill Publications Company |
+| 10 | 1 | 17,298 | Los Angeles Times Communications LLC (newspaper) |
+| 11 | 211 | 13,551 | Blackwell Publishing Ltd. |
+| 12 | 15 | 13,510 | American Medical Association |
+| 13 | 35 | 13,106 | Reed Business Information US |
+| 14 | 11 | 12,319 | H.M. The Stationery Office |
+| 15 | 315 | 11,923 | John Wiley & Sons, Inc. |
+| 16 | 201 | 11,244 | SAGE PUBLICATIONS, INC. |
+| 17 | 1 | 11,155 | Christian Science Publishing Society (newspaper) |
+| 18 | 79 | 11,051 | Oxford Publishing Limited (England) |
+| 19 | 1 | 10,925 | Tribune International Corp (Abendpost-Sonntagpost) |
+| 20 | 167 | 10,547 | Wiley Subscription Services, Inc. |
+| 21 | 184 | 9,950 | Cambridge University Press |
+| 22 | 3 | 9,946 | International Government Document |
+| 23 | 1 | 9,906 | Daily Worker Pub. Co. (newspaper) |
+| 24 | 255 | 9,344 | Taylor & Francis Ltd. |
+| 25 | 1 | 9,237 | Massachusetts Medical Society (NEJM) |
+| 26 | 1 | 9,129 | The Irish Times Trust CLG (newspaper) |
+| 27 | 1 | 9,129 | Nash Holdings (Washington Post) |
+| 28 | 1 | 8,795 | Harper's Magazine Co (Harper's Weekly) |
+| 29 | 30 | 8,097 | University of Chicago Press |
+| 30 | 11 | 7,914 | Reed Business Information UK |
+
+[^1]: "Open Court Publishing Co" appears as the publisher on a wide range of older periodicals — likely a metadata artifact of microfilm reprint editions. Worth manual sampling before using this row to drive segmenter prioritization.
+
+### Top 30 individual pub_* collections — periodicals only
+
+| rank | issues | issn | pub_id | note |
+|---:|---:|---|---|---|
+| 1 | 32,997 | 0362-4331 | pub_new-york-times | newspaper |
+| 2 | 32,566 | 2473-1609 | pub_atlanta-constitution | newspaper |
+| 3 | 32,308 | — | pub_chicago-daily-tribune | newspaper |
+| 4 | 30,672 | 0097-6326 | pub_federal-register-find | gov doc |
+| 5 | 29,580 | 1930-9600 | pub_st-louis-post-dispatch | newspaper |
+| 6 | 17,298 | 0458-3035 | pub_los-angeles-times | newspaper |
+| 7 | 12,367 | 0891-9526 | pub_enr | trade (Engineering News-Record) |
+| 8 | 12,093 | 2057-4436 | pub_london-gazette | gov doc |
+| 9 | 11,155 | 0882-7729 | pub_christian-science-monitor | newspaper |
+| 10 | 10,925 | 0896-3762 | pub_abendpost-sonntagpost | newspaper (German-American) |
+| 11 | 10,635 | — | pub_united-states-congress-hearings-prints-and-reports | gov doc |
+| 12 | 9,906 | 2769-4763 | pub_daily-worker | newspaper |
+| 13 | 9,820 | — | pub_journal-officiel-de-la-republique-francaise | gov doc (French) |
+| 14 | 9,237 | 0028-4793 | pub_new-england-journal-of-medicine | **scholarly journal** |
+| 15 | 9,129 | 0791-5144 | pub_irish_times | newspaper |
+| 16 | 9,129 | 0190-8286 | pub_washington-post | newspaper |
+| 17 | 8,795 | 0360-2397 | pub_harpers-weekly | magazine |
+| 18 | 8,323 | 0098-7484 | pub_jama | **scholarly journal** |
+| 19 | 7,464 | 0013-0613 | pub_economist | magazine |
+| 20 | 7,277 | 0038-6952 | pub_spectator-uk | magazine |
+| 21 | 6,996 | 0140-6736 | pub_the-lancet | **scholarly journal** |
+| 22 | 6,779 | 0163-2876 | pub_commercial-and-financial-chronicle | trade |
+| 23 | 6,681 | 0019-2422 | pub_illustrated-london-news | magazine |
+| 24 | 6,313 | 0021-633X | pub_jewish-chronicle | newspaper |
+| 25 | 6,047 | 0038-1047 | pub_solicitors-journal | trade |
+| 26 | 5,874 | 0048-9239 | pub_saturday-evening-post | magazine |
+| 27 | 5,574 | — | pub_utah-and-the-mormons | special collection |
+| 28 | 5,444 | 0013-094X | pub_editor-publisher | trade |
+| 29 | 5,360 | — | pub_theatrical-observer-and-daily-bills-of-the-play | 19c magazine |
+| 30 | 5,325 | 0029-3970 | pub_notes-and-queries | scholarly humanities |
+
+### What this means for project ordering
+
+By **document profile** (which drives how segartable an issue is):
+
+1. **Scholarly journals — segartable first.** The fatcat-matched scholarly-leaning view (further down in this doc) is the right ordering: Elsevier, Springer, Wiley, Blackwell, SAGE, Cambridge UP, Taylor & Francis, OUP, Lippincott, AMA. Plus single-title flagships NEJM, JAMA, Lancet, Nature.
+2. **Magazines** (Harper's, Economist, Spectator, ILN, Saturday Evening Post) — large issue counts, highly variable layouts. Tackle after scholarly is solid.
+3. **Newspapers** (NYT, WaPo, LA Times, CSM, Atlanta/Chicago/St Louis dailies, Irish Times, Daily Worker) — huge volumes but front-page-jump articles, multi-section issues, no consistent printed page numbering. A different sub-project; defer.
+4. **Government documents** (Federal Register, London Gazette, Congressional hearings, Journal Officiel) — yet another structural model. Defer.
+5. **Trade publications** (ENR, Editor & Publisher, Solicitors' Journal, etc.) — somewhere between magazines and journals; case-by-case.
+
 ## Methodology
 
 Run on 2026-05-04 against the fatcat 2024-02-18 dump. Each pub_* collection identified by `build_pub_collections_index.py` was queried via IA's advancedsearch endpoint with `q=collection:"pub_<slug>" AND mediatype:texts, rows=0` to get the issue count. Counts were then aggregated by publisher.
