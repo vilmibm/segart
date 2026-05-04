@@ -46,18 +46,36 @@ def title_match(a, b, threshold=0.85):
 def extract_surnames(s):
     """Pull plausible surnames from a free-form author string.
 
-    ILL authors are often abbreviated: 'Wallin, J', 'F. Surname',
-    'Henk J. Haarmann, Marcel Adam Just, Patricia A. Ca'.
+    ILL authors come in two Western conventions:
+      surname-first comma-separated: 'Miller, G E', 'Wallin, J',
+        'Pounds, L A', 'Patten, Dennis M.,'
+      given-name-first:               'George E. Miller', 'Lois A. Pounds',
+        'Henk J. Haarmann, Marcel Adam Just, Patricia A. Ca'
+
+    Multiple authors can be separated by `;` or ` and ` or `&`.
     """
     if not s:
         return set()
     surnames = set()
-    for piece in re.split(r"[,;&]| and ", s):
-        words = re.findall(r"[A-Z][a-zA-Z'\u00c0-\u017f-]+", piece)
-        if not words:
+    # Author boundary: ;, ` and `, &  (NOT comma — comma is used inside
+    # surname-first names)
+    for piece in re.split(r"\s*;\s*|\s+and\s+|\s*&\s*", s):
+        piece = piece.strip()
+        if not piece:
             continue
-        # Heuristic: longest word in the piece is most likely the surname.
-        surnames.add(max(words, key=len).lower())
+        if "," in piece:
+            # Surname-first: take everything before the first comma.
+            surname_text = piece.split(",", 1)[0]
+            words = re.findall(r"[A-Z][a-zA-Z'\u00c0-\u017f-]+", surname_text)
+            if words:
+                surnames.add(words[0].lower())
+        else:
+            # Given-first: surname is the last capitalized multi-letter word.
+            words = re.findall(r"[A-Z][a-zA-Z'\u00c0-\u017f-]+", piece)
+            long_words = [w for w in words if len(w) >= 3]
+            chosen = (long_words or words)
+            if chosen:
+                surnames.add(chosen[-1].lower())
     return surnames
 
 
