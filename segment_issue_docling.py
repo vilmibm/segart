@@ -29,7 +29,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.5-docling"
+SEGMENTER_VERSION = "0.6-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
 # previously here but matched any sentence starting "Dr. Smith said ..."
@@ -141,10 +141,17 @@ NAME_SHAPE_RES = [
 def looks_like_byline(text):
     """Return True if `text` plausibly is an author byline.
 
-    Tighter rule (v0.3.2): require an explicit credential
-    (M.D./Ph.D./R.N./...) or a recognized name-shape pattern, or a `by `
-    prefix. Subtitles and abstract intros that happen to be title-cased no
-    longer pass — those don't have name shapes.
+    Hierarchy (most-trusted first):
+      1. Explicit "by " prefix → True
+      2. Credential present (M.D., Ph.D., R.N., ...) → True
+      3. Strong name patterns (initials, surname-comma-initial,
+         all-caps name) → True
+      4. The looser two-cap-word pattern (`^Sue Buckley`, `^Anthony
+         Joyce`) only counts as a byline IF the text ALSO has a
+         multi-author connector (`,`, ` and `, ` & `, `;`) OR is short
+         (≤30 chars) — without that, things like `Asian American
+         Women's Movement in California` get classified as bylines
+         when they're really subtitles.
     """
     if not text or len(text) < 3 or len(text) > 300:
         return False
@@ -153,9 +160,17 @@ def looks_like_byline(text):
         return True  # had explicit "by " prefix → trust it
     if CRED_RE.search(body):
         return True
-    for r in NAME_SHAPE_RES:
+    # Strong patterns (0..3) — trust on their own.
+    for r in NAME_SHAPE_RES[:4]:
         if r.search(body):
             return True
+    # Loose two-cap-word patterns (4..) — gated on connector OR brevity.
+    has_connector = bool(re.search(r",|\s+and\s+|\s*&\s*|;", body))
+    short = len(body) <= 30
+    if has_connector or short:
+        for r in NAME_SHAPE_RES[4:]:
+            if r.search(body):
+                return True
     return False
 
 
@@ -198,6 +213,69 @@ TABLE_FIGURE_RE = re.compile(
     r"^(table|figure|fig\.?)\s*(\d+|[ivxlc]+)\b",
     re.IGNORECASE,
 )
+
+# v0.6: Section-label prefixes that frequently get glued to the front of
+# article titles when docling treats them as a separate header block
+# stacked above the title. We strip the prefix so the remaining text is
+# a clean article title. Order matters — longest first so we strip
+# multi-word labels before single-word ones.
+TITLE_LABEL_PREFIXES = sorted(
+    [
+        "introduction to special topic forum",
+        "national policy perspectives",
+        "editorial team essay",
+        "invited articles",
+        "special topic forum",
+        "research articles",
+        "research article",
+        "original articles",
+        "original article",
+        "book reviews",
+        "book review",
+        "essays",
+        "essay",
+        "features",
+        "departments",
+        "articles",
+        "editorial",
+        "editorials",
+        "perspectives",
+        "perspective",
+        "letters to the editor",
+        "letters",
+        "communications",
+        "communication",
+        "news",
+        "review",
+        "note",
+        "notes",
+        "short paper",
+        "short papers",
+        "report",
+        "reports",
+    ],
+    key=lambda s: -len(s),
+)
+
+
+def _strip_label_prefix(title):
+    """Remove a leading section-label phrase from `title`, if present.
+
+    Compares case-insensitively against TITLE_LABEL_PREFIXES. The label
+    must be followed by whitespace and at least one more word — we
+    don't want to nuke titles that genuinely ARE just "Editorial".
+    """
+    if not title:
+        return title
+    norm = re.sub(r"\s+", " ", title.strip())
+    low = norm.lower()
+    for label in TITLE_LABEL_PREFIXES:
+        if low.startswith(label + " "):
+            remainder = norm[len(label):].lstrip(" :;,-")
+            # Require remainder to be substantial — at least 3 words.
+            if len(remainder.split()) >= 3:
+                return remainder
+    return title
 
 
 def parse_authors(text):
@@ -296,6 +374,12 @@ def detect_articles(doc, raw=None):
 
     def _emit(p, title, byline_text, header_start_idx, ordered):
         """Apply per-candidate filters; append to article_starts/raw if kept."""
+        if not title or len(title) < 5:
+            return
+        # v0.6: strip leading section-label prefixes ("ESSAYS Beyond
+        # Florence Nightingale" → "Beyond Florence Nightingale") before
+        # the dedupe and denylist checks.
+        title = _strip_label_prefix(title)
         if not title or len(title) < 5:
             return
         ttl_norm = re.sub(r"\s+", " ", title.lower())

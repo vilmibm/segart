@@ -47,11 +47,20 @@ ram_watchdog() {
 needs_run() {
   local item="$1" toc="$OUT_DIR/${item}_toc.json"
   [[ ! -f "$toc" ]] && return 0
-  python3 - "$toc" <<'PY' >/dev/null 2>&1 || return 0
-import json, sys
+  # Re-run when the file's stamped version is older than what
+  # segment_issue_docling.py currently exports — that way bumping
+  # SEGMENTER_VERSION is the only thing needed to schedule a re-sweep.
+  python3 - "$toc" "$HERE/segment_issue_docling.py" <<'PY' >/dev/null 2>&1 || return 0
+import json, re, sys
 toc = json.load(open(sys.argv[1]))
 ver = (toc.get("generator") or {}).get("version", "")
-sys.exit(0 if ver.startswith(("0.5", "0.6", "0.7", "0.8", "0.9", "1.")) else 1)
+script = open(sys.argv[2]).read()
+m = re.search(r'SEGMENTER_VERSION\s*=\s*["\']([^"\']+)["\']', script)
+cur = m.group(1) if m else ""
+def parse(v):
+    m = re.match(r"(\d+)\.(\d+)", v)
+    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+sys.exit(0 if parse(ver) >= parse(cur) else 1)
 PY
   return 1
 }
@@ -74,31 +83,33 @@ run_one() {
 
   echo "=== v0.5 queue starting $(date +%H:%M:%S) parallel=$PARALLEL ram_floor=${RAM_FLOOR}MB ==="
 
-  declare -a pids=()
-  declare -A queued=()
-  declare -A done_or_skipped=()
+  # Bash 3.2-compatible: use temp files instead of associative arrays.
+  STATE_DIR="$TMP/v04_queue_state"
+  rm -rf "$STATE_DIR"
+  mkdir -p "$STATE_DIR/queued" "$STATE_DIR/skipped"
+  pids=()
   passes=0
   while :; do
     passes=$((passes + 1))
     found_work=0
     for d in "$ITEMS_DIR"/sim_*/; do
       item=$(basename "$d")
-      [[ -n "${queued[$item]:-}" ]] && continue
-      [[ -n "${done_or_skipped[$item]:-}" ]] && continue
+      [[ -e "$STATE_DIR/queued/$item" ]] && continue
+      [[ -e "$STATE_DIR/skipped/$item" ]] && continue
       pdf="$d${item}.pdf"
       pn="$d${item}_page_numbers.json"
       if [[ ! -f "$pdf" || ! -f "$pn" ]]; then
-        # Don't mark as done — wait for download to complete in a later pass.
+        # Wait for download to complete in a later pass.
         continue
       fi
       pages=$(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1])).get('pages',[])))" "$pn" 2>/dev/null || echo 0)
       if (( pages > MAX_PAGES )); then
         echo "  SKIP $item ($pages pages > $MAX_PAGES)"
-        done_or_skipped[$item]=1
+        touch "$STATE_DIR/skipped/$item"
         continue
       fi
       if ! needs_run "$item"; then
-        done_or_skipped[$item]=1
+        touch "$STATE_DIR/skipped/$item"
         continue
       fi
 
@@ -114,7 +125,7 @@ run_one() {
 
       run_one "$item" &
       pids+=("$!")
-      queued[$item]=1
+      touch "$STATE_DIR/queued/$item"
       found_work=1
     done
 

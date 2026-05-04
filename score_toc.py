@@ -34,19 +34,23 @@ def normalize_title(s):
     return " ".join(w for w in s.split() if w not in STOPWORDS)
 
 
-def title_match(a, b, threshold=0.85, prefix_min_words=4, contains_min_words=5):
+def title_match(a, b, threshold=0.85,
+                prefix_min_words=4, prefix_min_chars=20,
+                contains_min_words=5, contains_min_chars=25):
     """Compare two titles after normalization.
 
     True if any of:
       - normalized strings are equal
-      - one starts with the other AND the shorter has ≥prefix_min_words
-        meaningful words (handles ILL anchors that append section context
-        like "...: Termination and group therapy" to article titles)
+      - one starts with the other AND the shorter has either
+        ≥prefix_min_words words OR ≥prefix_min_chars characters
+        (catches both "...: Termination and group therapy" appended
+        context AND truncated segmenter output like "Pedagogic
+        Hegemonicide" matching the full "Pedagogic Hegemonicide and the
+        Asian American Student")
       - the shorter is contained as a contiguous substring inside the
-        longer AND the shorter has ≥contains_min_words words (handles
-        segmenter outputs that concatenate section header + article
-        title, e.g. "ESSAYS The Nursing-Medicine Relationship Beyond
-        Florence Nightingale ...")
+        longer AND the shorter has ≥contains_min_words words OR
+        ≥contains_min_chars characters (catches segmenter outputs that
+        concatenate section header + article title)
       - SequenceMatcher ratio ≥ threshold
     """
     na, nb = normalize_title(a), normalize_title(b)
@@ -55,11 +59,18 @@ def title_match(a, b, threshold=0.85, prefix_min_words=4, contains_min_words=5):
     if na == nb:
         return True
     short, long_ = (na, nb) if len(na) <= len(nb) else (nb, na)
-    if long_.startswith(short + " ") and len(short.split()) >= prefix_min_words:
+    short_distinctive = (
+        len(short.split()) >= prefix_min_words
+        or len(short) >= prefix_min_chars
+    )
+    if long_.startswith(short + " ") and short_distinctive:
         return True
-    if (
+    short_contains_ok = (
         len(short.split()) >= contains_min_words
-        and (f" {short} " in f" {long_} " or long_.endswith(" " + short))
+        or len(short) >= contains_min_chars
+    )
+    if short_contains_ok and (
+        f" {short} " in f" {long_} " or long_.endswith(" " + short)
     ):
         return True
     return SequenceMatcher(None, na, nb).ratio() >= threshold
@@ -129,30 +140,25 @@ def leaves_match(anchor_ranges, toc_ranges):
     return list(anchor_ranges[0]) == list(toc_ranges[0])
 
 
-def leaves_match_soft(anchor_ranges, toc_ranges, start_tol=1, end_tol=3):
-    """Soft: start leaves within ±start_tol AND end leaves within ±end_tol.
-
-    Why end_tol > start_tol: the segmenter's article-end boundary is
-    "next-article-start − 1", which is correct in spirit but often offset
-    by a few leaves when ads or back-matter sit between articles. Article
-    starts are sharper, so we hold them to a tighter tolerance.
+def leaves_match_soft(anchor_ranges, toc_ranges, start_tol=1):
+    """Soft: start leaves within ±start_tol. End leaf is intentionally
+    NOT checked — the segmenter computes end as 'next-article-start − 1',
+    which routinely overshoots the true end by many leaves when an
+    intervening article wasn't detected. The article identity is
+    determined by start position; end is bookkeeping.
     """
     if not anchor_ranges or not toc_ranges:
         return False
     a0 = anchor_ranges[0]
     t0 = toc_ranges[0]
-    a_s, a_e = _leaf_int(a0[0]), _leaf_int(a0[-1])
-    t_s, t_e = _leaf_int(t0[0]), _leaf_int(t0[-1])
+    a_s = _leaf_int(a0[0])
+    t_s = _leaf_int(t0[0])
     if a_s is None or t_s is None:
         return False
-    if abs(a_s - t_s) > start_tol:
-        return False
-    if a_e is not None and t_e is not None and abs(a_e - t_e) > end_tol:
-        return False
-    return True
+    return abs(a_s - t_s) <= start_tol
 
 
-def find_hit(anchor, entries, start_tol=1, end_tol=3):
+def find_hit(anchor, entries, start_tol=1):
     """Pick the best entry for `anchor`.
 
     Preference order:
@@ -171,7 +177,7 @@ def find_hit(anchor, entries, start_tol=1, end_tol=3):
     exact = [e for e in entries if leaves_match(a_leaves, e.get("leaf_ranges"))]
     soft = [
         e for e in entries
-        if leaves_match_soft(a_leaves, e.get("leaf_ranges"), start_tol, end_tol)
+        if leaves_match_soft(a_leaves, e.get("leaf_ranges"), start_tol)
     ]
 
     for e in exact:
