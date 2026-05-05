@@ -17,6 +17,7 @@ Usage:
   ./segment_issue_docling.py <item> -o /tmp/foo.json
 """
 import argparse
+import gzip
 import json
 import os
 import re
@@ -29,7 +30,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.7-docling"
+SEGMENTER_VERSION = "0.9-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
 # previously here but matched any sentence starting "Dr. Smith said ..."
@@ -66,18 +67,20 @@ def fetch_page_numbers(item, cache_dir):
     return pn
 
 
-def docling_convert(pdf_path):
+def docling_convert(pdf_path, device="mps"):
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.datamodel.accelerator_options import AcceleratorOptions, AcceleratorDevice
 
+    # CPU mode trades speed for lower peak unified-memory pressure on M2:
+    # the layout model's weights and activations don't sit in GPU RAM
+    # alongside everything else competing for the same pool.
+    dev = AcceleratorDevice.CPU if device == "cpu" else AcceleratorDevice.MPS
     opts = PdfPipelineOptions()
     opts.do_ocr = False
     opts.do_table_structure = False
-    opts.accelerator_options = AcceleratorOptions(
-        device=AcceleratorDevice.MPS, num_threads=4
-    )
+    opts.accelerator_options = AcceleratorOptions(device=dev, num_threads=4)
     conv = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
     )
@@ -309,6 +312,42 @@ def _y_top(t):
     return bb[1] or 0
 
 
+def _height(t):
+    """Height of a text item's bbox (Docling y is bottom-up: top − bottom)."""
+    bb = bbox_of(t) or (0, 0, 0, 0)
+    if bb[1] is None or bb[3] is None:
+        return 0.0
+    return abs(bb[1] - bb[3])
+
+
+def _looks_titleish(text):
+    """A 'text' item promoted to candidate-header must look title-like:
+    short-ish, no terminal sentence punctuation, has multiple words."""
+    if not text:
+        return False
+    s = text.strip()
+    if len(s) < 10 or len(s) > 200:
+        return False
+    if s.endswith(".") and not s.endswith(("Inc.", "Co.", "Jr.", "Sr.", "Ltd.", "ed.")):
+        return False
+    if s.count(" ") < 2:  # need ≥3 words
+        return False
+    return True
+
+
+def _promote_text_to_header(t, median_h, text_label_str):
+    """v0.8 trial: promote large 'text' items to candidate-header. The
+    intuition is that some article titles are labeled `text` instead of
+    `section_header` by docling, especially in older medical journals.
+    Empirically (32-item evaluation 2026-05-05) this kept hit-rate flat
+    at 22% (filtered) but worsened undershoot from 11% → 16% — most
+    'tall text' items turned out to be in-article subsections that
+    weren't previously emitted, so promoting them split real articles.
+    Currently DISABLED. To re-enable: lower the False return below.
+    """
+    return False
+
+
 def _merge_stacked_headers(ordered, header_idx, max_gap_y=80):
     """Walk down from `header_idx`, gathering subsequent header items that
     sit immediately below (small y-gap) — these are line continuations of
@@ -374,6 +413,10 @@ def detect_articles(doc, raw=None):
 
     def _emit(p, title, byline_text, header_start_idx, ordered):
         """Apply per-candidate filters; append to article_starts/raw if kept."""
+        # Collapse whitespace once at the boundary: docling joins per-line
+        # text with stray spaces, so titles arrive as "A  Model  for  Theory".
+        title = re.sub(r"\s+", " ", title or "").strip()
+        byline_text = re.sub(r"\s+", " ", byline_text or "").strip()
         if not title or len(title) < 5:
             return
         # v0.6: strip leading section-label prefixes ("ESSAYS Beyond
@@ -382,7 +425,7 @@ def detect_articles(doc, raw=None):
         title = _strip_label_prefix(title)
         if not title or len(title) < 5:
             return
-        ttl_norm = re.sub(r"\s+", " ", title.lower())
+        ttl_norm = title.lower()
         if ttl_norm in seen_titles:
             return
         if ttl_norm in SUBSECTION_DENYLIST:
@@ -408,6 +451,17 @@ def detect_articles(doc, raw=None):
 
     for p in sorted(page_texts):
         ordered = sorted(page_texts[p], key=y_sort)
+        # v0.8: compute median height of items labeled 'text' on this
+        # page, so we can identify font-size outliers (likely article
+        # titles that docling didn't label as section_header).
+        text_heights = [
+            _height(t) for t in ordered
+            if text_label(t) == "text" and _height(t) > 0
+        ]
+        text_heights.sort()
+        median_h = (
+            text_heights[len(text_heights) // 2] if text_heights else 0
+        )
         # Walk top-down. Maintain "current header chunk" (most recent
         # merged headers above the cursor with no intervening text). When
         # we hit a byline-shaped text item, emit (chunk, byline) as an
@@ -422,11 +476,12 @@ def detect_articles(doc, raw=None):
         while i < len(ordered):
             t = ordered[i]
             label = text_label(t)
-            if label in HEADER_LABELS:
+            promoted = _promote_text_to_header(t, median_h, label)
+            if label in HEADER_LABELS or promoted:
                 merged, end_idx = _merge_stacked_headers(ordered, i)
                 cur_header_start = i
                 cur_header_text = merged
-                cur_header_is_starter = label in ARTICLE_START_LABELS
+                cur_header_is_starter = label in ARTICLE_START_LABELS or promoted
                 i = end_idx + 1
                 continue
             if (
@@ -464,40 +519,57 @@ def main():
     p.add_argument("--cache-dir", default=str(CACHE))
     p.add_argument("--keep-pdf", action="store_true",
                    help="Don't delete PDF after caching docling output")
+    p.add_argument("--device", choices=("mps", "cpu"), default="mps",
+                   help="Docling accelerator. CPU is slower but uses less "
+                        "unified RAM — pick it for big PDFs on M-series.")
     p.add_argument("--verbose", "-v", action="store_true")
     args = p.parse_args()
 
     cache_dir = Path(args.cache_dir)
-    pdf = fetch_pdf(args.item, cache_dir)
+    item_dir = cache_dir / args.item
+    cache_doc_gz = item_dir / f"{args.item}_docling.json.gz"
+    cache_doc_legacy = item_dir / f"{args.item}_docling.json"
+
+    # Page-number JSON is small; always fetch.
     pn = fetch_page_numbers(args.item, cache_dir)
     leaf_to_page, pn_data = leaf_to_page_map(pn)
     leaf_count = max((p["leafNum"] for p in pn_data.get("pages", [])), default=0)
 
-    # Cache the docling conversion: if a previous run produced
-    # <item>_docling.json we deserialize it instead of re-running the
-    # layout model (which costs minutes per item). Future iterations
-    # of segmentation heuristics or downstream tools (scholar.archive
-    # cross-walks, LLM extraction) read the same cache.
-    cache_doc = pdf.parent / f"{args.item}_docling.json"
+    # Cache-first flow: if a cached docling exists we load it and SKIP
+    # fetching the PDF entirely. Cache is gzip-compressed (~7x smaller);
+    # legacy uncompressed .json is read once then re-saved as .gz.
     doc = None
-    if cache_doc.exists():
+    pdf = None
+    cache_src = cache_doc_gz if cache_doc_gz.exists() else (cache_doc_legacy if cache_doc_legacy.exists() else None)
+    if cache_src is not None:
         try:
             from docling_core.types.doc import DoclingDocument
-            doc = DoclingDocument.model_validate_json(open(cache_doc).read())
-            print(f"  loaded docling cache {cache_doc.name}", file=sys.stderr)
+            opener = gzip.open if cache_src.suffix == ".gz" else open
+            with opener(cache_src, "rt", encoding="utf-8") as fh:
+                doc = DoclingDocument.model_validate_json(fh.read())
+            print(f"  loaded docling cache {cache_src.name}", file=sys.stderr)
+            if cache_src is cache_doc_legacy:
+                try:
+                    with gzip.open(cache_doc_gz, "wt", encoding="utf-8") as fh:
+                        fh.write(doc.model_dump_json())
+                    cache_doc_legacy.unlink()
+                    print(f"  migrated legacy cache → {cache_doc_gz.name}", file=sys.stderr)
+                except Exception as e:
+                    print(f"  WARN: legacy migration failed: {e}", file=sys.stderr)
         except Exception as e:
-            print(f"  cache load failed ({e}); re-running docling", file=sys.stderr)
+            print(f"  cache load failed ({e}); will re-run docling", file=sys.stderr)
             doc = None
     if doc is None:
+        pdf = fetch_pdf(args.item, cache_dir)
         print(f"converting {pdf} via Docling...", file=sys.stderr, flush=True)
         import time
         t0 = time.time()
-        doc = docling_convert(pdf)
+        doc = docling_convert(pdf, device=args.device)
         print(f"  conversion took {time.time() - t0:.1f}s", file=sys.stderr)
-        # Persist for future re-segmentation passes.
         try:
-            open(cache_doc, "w").write(doc.model_dump_json())
-            print(f"  wrote docling cache {cache_doc.name}", file=sys.stderr)
+            with gzip.open(cache_doc_gz, "wt", encoding="utf-8") as fh:
+                fh.write(doc.model_dump_json())
+            print(f"  wrote docling cache {cache_doc_gz.name}", file=sys.stderr)
         except Exception as e:
             print(f"  WARN: docling cache write failed: {e}", file=sys.stderr)
 
@@ -568,7 +640,7 @@ def main():
     # Disk hygiene: once the docling cache is on disk, the PDF is no
     # longer needed for re-segmentation. Future segmentation passes load
     # from the cache. The PDF can be re-fetched from IA if ever needed.
-    if cache_doc.exists() and pdf.exists() and not args.keep_pdf:
+    if pdf is not None and cache_doc_gz.exists() and pdf.exists() and not args.keep_pdf:
         try:
             sz = pdf.stat().st_size
             pdf.unlink()

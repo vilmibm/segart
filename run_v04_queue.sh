@@ -20,6 +20,9 @@ LOG="${1:-${TMP}/v04_queue.log}"
 MAX_PAGES="${SEGART_MAX_PAGES:-500}"
 PARALLEL="${SEGART_PARALLEL:-2}"
 RAM_FLOOR="${SEGART_RAM_FLOOR_MB:-200}"
+SWAP_FLOOR="${SEGART_SWAP_FLOOR_MB:-512}"
+WAIT_MARGIN="${SEGART_WAIT_MARGIN_MB:-256}"
+BIG_PAGES="${SEGART_BIG_PAGES:-250}"
 LOCK="${TMP}/v04_queue.lock"
 mkdir -p "$OUT_DIR"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -30,18 +33,48 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   exit 0
 fi
 
-# Watchdog: poll free+inactive RAM every 5s. Below the floor, kill the
-# most-recently-spawned docling worker (highest PID).
+# Watchdog: poll free+inactive RAM and swap-free every 5s. If either drops
+# below its floor, kill the most-recently-spawned docling worker (highest
+# PID). Swap floor was added after the 2026-05-05 panic, where compressor
+# segments hit 100% before the RAM floor tripped.
 ram_watchdog() {
   while sleep 5; do
     avail=$(vm_stat | awk '/Pages free/ {f=$3} /Pages inactive/ {i=$3} END {printf "%d", (f+i)*16384/1024/1024}')
+    swap_free=$(sysctl -n vm.swapusage 2>/dev/null | sed -n 's/.*free = \([0-9.]*\)M.*/\1/p' | awk '{printf "%d", $1}')
+    reason=""
     if (( avail < RAM_FLOOR )); then
+      reason="ram avail=${avail}MB < floor=${RAM_FLOOR}MB"
+    elif [[ -n "$swap_free" ]] && (( swap_free < SWAP_FLOOR )); then
+      reason="swap free=${swap_free}MB < floor=${SWAP_FLOOR}MB"
+    fi
+    if [[ -n "$reason" ]]; then
       victim=$(ps -ax -o pid,command | awk '/segment_issue_docling/ && !/awk/ && !/grep/ {print $1}' | sort -n | tail -1)
       if [[ -n "$victim" ]]; then
-        echo "  WATCHDOG avail=${avail}MB < floor=${RAM_FLOOR}MB → kill youngest docling pid $victim"
+        echo "  WATCHDOG $reason → kill youngest docling pid $victim"
         kill -TERM "$victim" 2>/dev/null || true
       fi
     fi
+  done
+}
+
+# Pre-launch gate: block until both RAM and swap are above floor + margin.
+# Without this, the watchdog can kill worker N, then the queue immediately
+# starts worker N+1 before the kernel reclaims memory — cascading FAILs.
+wait_for_headroom() {
+  local warned=""
+  while true; do
+    local avail swap_free
+    avail=$(vm_stat | awk '/Pages free/ {f=$3} /Pages inactive/ {i=$3} END {printf "%d", (f+i)*16384/1024/1024}')
+    swap_free=$(sysctl -n vm.swapusage 2>/dev/null | sed -n 's/.*free = \([0-9.]*\)M.*/\1/p' | awk '{printf "%d", $1}')
+    if (( avail >= RAM_FLOOR + WAIT_MARGIN )) && [[ -n "$swap_free" ]] && (( swap_free >= SWAP_FLOOR + WAIT_MARGIN )); then
+      [[ -n "$warned" ]] && echo "  PRE-LAUNCH cleared: avail=${avail}MB swap_free=${swap_free}MB"
+      return 0
+    fi
+    if [[ -z "$warned" ]]; then
+      echo "  PRE-LAUNCH waiting: avail=${avail}MB swap_free=${swap_free}MB (need >=$(( RAM_FLOOR + WAIT_MARGIN ))MB ram / >=$(( SWAP_FLOOR + WAIT_MARGIN ))MB swap)"
+      warned=1
+    fi
+    sleep 10
   done
 }
 
@@ -67,10 +100,16 @@ PY
 }
 
 run_one() {
-  local item="$1"
-  echo "=== START $item $(date +%H:%M:%S) ==="
+  local item="$1" pages="$2"
+  local device_args=()
+  local mode_note=""
+  if (( pages > BIG_PAGES )); then
+    device_args+=(--device cpu)
+    mode_note=" (cpu, $pages pages)"
+  fi
+  echo "=== START $item $(date +%H:%M:%S)${mode_note} ==="
   if "$HERE/segment_issue_docling.py" "$item" \
-       -o "$OUT_DIR/${item}_toc.json" 2>&1 | tail -5; then
+       -o "$OUT_DIR/${item}_toc.json" "${device_args[@]}" 2>&1 | tail -5; then
     echo "=== END   $item $(date +%H:%M:%S) ==="
   else
     echo "=== FAIL  $item $(date +%H:%M:%S) (exit $?)  ==="
@@ -82,7 +121,7 @@ run_one() {
   WATCHDOG_PID=$!
   trap 'kill $WATCHDOG_PID 2>/dev/null || true; rmdir "$LOCK" 2>/dev/null || true' EXIT
 
-  echo "=== v0.5 queue starting $(date +%H:%M:%S) parallel=$PARALLEL ram_floor=${RAM_FLOOR}MB ==="
+  echo "=== v0.5 queue starting $(date +%H:%M:%S) parallel=$PARALLEL ram_floor=${RAM_FLOOR}MB swap_floor=${SWAP_FLOOR}MB wait_margin=${WAIT_MARGIN}MB big_pages=${BIG_PAGES} ==="
 
   # Bash 3.2-compatible: use temp files instead of associative arrays.
   STATE_DIR="$TMP/v04_queue_state"
@@ -124,7 +163,8 @@ run_one() {
         pids=("${new_pids[@]}")
       done
 
-      run_one "$item" &
+      wait_for_headroom
+      run_one "$item" "$pages" &
       pids+=("$!")
       touch "$STATE_DIR/queued/$item"
       found_work=1
