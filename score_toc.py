@@ -34,46 +34,44 @@ def normalize_title(s):
     return " ".join(w for w in s.split() if w not in STOPWORDS)
 
 
-def title_match(a, b, threshold=0.85,
-                prefix_min_words=4, prefix_min_chars=20,
-                contains_min_words=5, contains_min_chars=25):
-    """Compare two titles after normalization.
+def title_match(a, b,
+                token_overlap=0.6, ratio_threshold=0.7,
+                short_min_words=2):
+    """Search-style title match: would a user looking for `a` be happy
+    with `b` in the result list?
 
-    True if any of:
-      - normalized strings are equal
-      - one starts with the other AND the shorter has either
-        ≥prefix_min_words words OR ≥prefix_min_chars characters
-        (catches both "...: Termination and group therapy" appended
-        context AND truncated segmenter output like "Pedagogic
-        Hegemonicide" matching the full "Pedagogic Hegemonicide and the
-        Asian American Student")
-      - the shorter is contained as a contiguous substring inside the
-        longer AND the shorter has ≥contains_min_words words OR
-        ≥contains_min_chars characters (catches segmenter outputs that
-        concatenate section header + article title)
-      - SequenceMatcher ratio ≥ threshold
+    Strategy:
+      - Normalize both, drop stopwords.
+      - PASS if one is contained in the other (any direction).
+      - PASS if shared content words / shorter content words ≥
+        token_overlap (e.g. anchor and entry share ≥60% of the smaller
+        side's meaningful words). Catches "Pedagogic Hegemonicide"
+        matching the full "Pedagogic Hegemonicide and the Asian
+        American Student" plus messy OCR truncations.
+      - PASS if SequenceMatcher ratio ≥ ratio_threshold (loosened from
+        0.85 since we're optimizing for "find the article" not byte
+        equality).
+
+    Tight enough that an unrelated article won't match (default
+    short_min_words=2 prevents 1-word coincidences).
     """
     na, nb = normalize_title(a), normalize_title(b)
     if not na or not nb:
         return False
     if na == nb:
         return True
+    wa, wb = na.split(), nb.split()
+    if len(wa) < short_min_words or len(wb) < short_min_words:
+        return False
     short, long_ = (na, nb) if len(na) <= len(nb) else (nb, na)
-    short_distinctive = (
-        len(short.split()) >= prefix_min_words
-        or len(short) >= prefix_min_chars
-    )
-    if long_.startswith(short + " ") and short_distinctive:
+    if f" {short} " in f" {long_} " or long_.startswith(short + " ") or long_.endswith(" " + short):
         return True
-    short_contains_ok = (
-        len(short.split()) >= contains_min_words
-        or len(short) >= contains_min_chars
-    )
-    if short_contains_ok and (
-        f" {short} " in f" {long_} " or long_.endswith(" " + short)
-    ):
+    sa, sb = set(wa), set(wb)
+    shared = sa & sb
+    smaller = min(len(sa), len(sb))
+    if smaller > 0 and len(shared) / smaller >= token_overlap:
         return True
-    return SequenceMatcher(None, na, nb).ratio() >= threshold
+    return SequenceMatcher(None, na, nb).ratio() >= ratio_threshold
 
 
 def extract_surnames(s):
@@ -158,6 +156,18 @@ def leaves_match_soft(anchor_ranges, toc_ranges, start_tol=1):
     return abs(a_s - t_s) <= start_tol
 
 
+def end_leaf_offset(anchor_ranges, toc_ranges):
+    """Signed end-leaf offset (toc_end − anchor_end). Positive means
+    segmenter overshoots past the article. None if either is missing."""
+    if not anchor_ranges or not toc_ranges:
+        return None
+    a_e = _leaf_int(anchor_ranges[0][-1])
+    t_e = _leaf_int(toc_ranges[0][-1])
+    if a_e is None or t_e is None:
+        return None
+    return t_e - a_e
+
+
 def find_hit(anchor, entries, start_tol=1):
     """Pick the best entry for `anchor`.
 
@@ -232,6 +242,10 @@ def score_toc(corpus_anchors, toc):
     out = []
     for anchor in corpus_anchors:
         hit, reasons = find_hit(anchor, entries)
+        end_off = end_leaf_offset(
+            anchor.get("leaf_ranges"),
+            hit.get("leaf_ranges") if hit else None,
+        )
         out.append(
             {
                 "item": item,
@@ -239,11 +253,17 @@ def score_toc(corpus_anchors, toc):
                 "anchor_author": anchor.get("article_author"),
                 "anchor_leaves": anchor.get("leaf_ranges"),
                 "matched_entry_title": hit.get("title") if hit else None,
+                "matched_entry_authors": hit.get("authors") if hit else None,
                 "matched_entry_leaves": hit.get("leaf_ranges") if hit else None,
                 "matched_entry_id": hit.get("id") if hit else None,
                 "reasons": reasons,
                 "match": reasons["match"],
                 "full_hit": reasons["match"] in ("exact", "soft"),
+                # End-leaf offset (segmenter_end − anchor_end). Matters
+                # for PDF excerpt quality: positive means we overshoot
+                # (PDF includes next article); negative means we
+                # undershoot (PDF cuts the article short).
+                "end_offset": end_off,
             }
         )
     return out
@@ -287,6 +307,7 @@ def main():
     n_entries_matched = 0
     match_counts = {"exact": 0, "soft": 0, "leaves_only": 0, "content_only": 0, "miss": 0}
     field_counts = {"leaves_strict": 0, "leaves_soft": 0, "title": 0, "author": 0}
+    end_offsets = []
     for path in toc_paths:
         with open(path) as f:
             toc = json.load(f)
@@ -308,6 +329,8 @@ def main():
                     field_counts[k] += 1
             if r["matched_entry_id"] and r["match"] in ("exact", "soft", "content_only"):
                 matched_ids.add(r["matched_entry_id"])
+            if r.get("end_offset") is not None and r["match"] in ("exact", "soft", "content_only"):
+                end_offsets.append(r["end_offset"])
             fout.write(json.dumps(r, ensure_ascii=False) + "\n")
         n_entries_matched += len(matched_ids)
 
@@ -334,6 +357,17 @@ def main():
                 f"({n_entries_matched * 100 // n_entries_total}%)",
                 file=sys.stderr,
             )
+        if end_offsets:
+            ends_within = sum(1 for o in end_offsets if abs(o) <= 1)
+            ends_within3 = sum(1 for o in end_offsets if abs(o) <= 3)
+            over = sum(1 for o in end_offsets if o > 3)
+            under = sum(1 for o in end_offsets if o < -3)
+            n = len(end_offsets)
+            print(f"  end-leaf accuracy (matched only):", file=sys.stderr)
+            print(f"    within ±1 leaf: {ends_within}/{n} ({ends_within*100//n}%)", file=sys.stderr)
+            print(f"    within ±3 leaf: {ends_within3}/{n} ({ends_within3*100//n}%)", file=sys.stderr)
+            print(f"    overshoot >3:   {over}/{n} ({over*100//n}%)  (PDF too long)", file=sys.stderr)
+            print(f"    undershoot <-3: {under}/{n} ({under*100//n}%)  (PDF too short)", file=sys.stderr)
     else:
         print("no anchors scored", file=sys.stderr)
 

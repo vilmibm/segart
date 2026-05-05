@@ -175,19 +175,23 @@ def leaf_int(leaf_str):
 
 
 def has_real_author(authors):
-    """True if at least one author has a clean name-shaped string and is
-    not editor-shaped. Used as a "trust override": a header that looks
-    label-shaped but is followed by a real byline is more likely a real
-    article in an all-caps journal layout than a section label."""
+    """True if at least one author has a confidently name-shaped string.
+
+    Only the STRICT patterns (with middle-initial, surname-comma-initial,
+    or all-caps name) count — the loose two-cap-words pattern is
+    excluded because OCR garbage like "Belt Buckle" or "Systolic Blood"
+    matches it and that was creating phantom 'real authors' for
+    in-article subsections, blocking the spurious-split merge."""
     if not authors:
         return False
+    strict_patterns = AUTHOR_NAME_SHAPES[:4]
     for a in authors:
         name = (a.get("name") or "").strip()
         if not name or len(name) > 60:
             continue
         if EDITOR_HINTS.search(name):
             continue
-        for r in AUTHOR_NAME_SHAPES:
+        for r in strict_patterns:
             if r.search(name):
                 return True
     return False
@@ -234,6 +238,33 @@ def filter_entries(entries, leaf_count, args):
         else:
             kept.append(e)
 
+    # Merge spurious-split articles: when two consecutive kept entries
+    # are very close (within args.min_article_leaves of each other) AND
+    # the second's byline doesn't have a strong author shape, treat the
+    # second as a within-article subsection and merge it into the
+    # first. This addresses the over-segmentation problem (many "split
+    # article" misses where a real long article got truncated by a
+    # false next-start).
+    kept.sort(key=lambda e: leaf_int(e["leaf_ranges"][0][0]) or 0)
+    merged = []
+    for e in kept:
+        if not merged:
+            merged.append(e); continue
+        prev = merged[-1]
+        prev_start = leaf_int(prev["leaf_ranges"][0][0]) or 0
+        e_start = leaf_int(e["leaf_ranges"][0][0]) or 0
+        gap = e_start - prev_start
+        # Strong byline = at least one author whose name matches a
+        # full-name shape and isn't editor-ish.
+        strong = has_real_author(e.get("authors"))
+        if gap < args.min_article_leaves and not strong:
+            # Subsection of prev, not a new article. Drop e silently
+            # (extends prev by virtue of the next-end-leaf rewrite below).
+            dropped.append((e, "merged_into_prev"))
+        else:
+            merged.append(e)
+    kept = merged
+
     # After filtering, extend each kept entry's first leaf range to end at
     # the leaf before the next kept entry's start (or leaf_count-1 for the
     # last). This corrects ranges that were truncated by intervening
@@ -273,6 +304,9 @@ def main():
     p.add_argument("--back-matter-index-frac", type=float, default=0.10,
                    help="Drop label-like entries whose start leaf is in the "
                         "last N fraction (default 0.10)")
+    p.add_argument("--min-article-leaves", type=int, default=3,
+                   help="Two consecutive entries closer than this with a "
+                        "weak second byline are merged (default 3)")
     p.add_argument("--verbose", "-v", action="store_true")
     args = p.parse_args()
 
