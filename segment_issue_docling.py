@@ -30,7 +30,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.9-docling"
+SEGMENTER_VERSION = "0.10-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
 # previously here but matched any sentence starting "Dr. Smith said ..."
@@ -411,8 +411,14 @@ def detect_articles(doc, raw=None):
     article_starts = []
     seen_titles = set()
 
-    def _emit(p, title, byline_text, header_start_idx, ordered):
-        """Apply per-candidate filters; append to article_starts/raw if kept."""
+    def _emit(p, title, byline_text, header_start_idx, ordered, header_ev=None):
+        """Apply per-candidate filters; append to article_starts/raw if kept.
+
+        `header_ev` records *why* this candidate was emitted — which docling
+        label triggered it, whether multiple header lines were merged, and
+        whether a font-size promotion fired. Used downstream by
+        augment_evidence.py and for heuristic profiling.
+        """
         # Collapse whitespace once at the boundary: docling joins per-line
         # text with stray spaces, so titles arrive as "A  Model  for  Theory".
         title = re.sub(r"\s+", " ", title or "").strip()
@@ -439,11 +445,14 @@ def detect_articles(doc, raw=None):
         )) >= 2:
             return
         seen_titles.add(ttl_norm)
+        ev = list(header_ev or [])
+        ev.append("byline_match")
         rec = {
             "page": p,
             "title": title,
             "authors": parse_authors(byline_text),
             "byline_text": byline_text,
+            "evidence": ev,
         }
         article_starts.append(rec)
         if raw is not None:
@@ -472,6 +481,7 @@ def detect_articles(doc, raw=None):
         cur_header_start = None
         cur_header_text = None
         cur_header_is_starter = False
+        cur_header_ev = []
         i = 0
         while i < len(ordered):
             t = ordered[i]
@@ -482,6 +492,9 @@ def detect_articles(doc, raw=None):
                 cur_header_start = i
                 cur_header_text = merged
                 cur_header_is_starter = label in ARTICLE_START_LABELS or promoted
+                cur_header_ev = ["promoted_font_size"] if promoted else [label]
+                if end_idx > i:
+                    cur_header_ev.append("merged_multiline")
                 i = end_idx + 1
                 continue
             if (
@@ -491,10 +504,12 @@ def detect_articles(doc, raw=None):
             ):
                 txt = (t.text or "").strip()
                 if looks_like_byline(txt):
-                    _emit(p, cur_header_text or "", txt, cur_header_start, ordered)
+                    _emit(p, cur_header_text or "", txt, cur_header_start,
+                          ordered, header_ev=cur_header_ev)
                     cur_header_start = None
                     cur_header_text = None
                     cur_header_is_starter = False
+                    cur_header_ev = []
             i += 1
     return article_starts
 
@@ -603,7 +618,7 @@ def main():
             "printed_pages": printed,
             "ext_ids": {},
             "confidence": 0.7,
-            "evidence": ["ocr"],
+            "evidence": s.get("evidence") or ["ocr"],
             "level": 1,
         })
 
