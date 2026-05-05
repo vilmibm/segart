@@ -29,7 +29,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.6-docling"
+SEGMENTER_VERSION = "0.7-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
 # previously here but matched any sentence starting "Dr. Smith said ..."
@@ -462,6 +462,8 @@ def main():
     p.add_argument("--raw-output", help="Also dump raw candidates as JSON "
                                         "(default <output>.raw.json)")
     p.add_argument("--cache-dir", default=str(CACHE))
+    p.add_argument("--keep-pdf", action="store_true",
+                   help="Don't delete PDF after caching docling output")
     p.add_argument("--verbose", "-v", action="store_true")
     args = p.parse_args()
 
@@ -471,11 +473,33 @@ def main():
     leaf_to_page, pn_data = leaf_to_page_map(pn)
     leaf_count = max((p["leafNum"] for p in pn_data.get("pages", [])), default=0)
 
-    print(f"converting {pdf} via Docling...", file=sys.stderr, flush=True)
-    import time
-    t0 = time.time()
-    doc = docling_convert(pdf)
-    print(f"  conversion took {time.time() - t0:.1f}s", file=sys.stderr)
+    # Cache the docling conversion: if a previous run produced
+    # <item>_docling.json we deserialize it instead of re-running the
+    # layout model (which costs minutes per item). Future iterations
+    # of segmentation heuristics or downstream tools (scholar.archive
+    # cross-walks, LLM extraction) read the same cache.
+    cache_doc = pdf.parent / f"{args.item}_docling.json"
+    doc = None
+    if cache_doc.exists():
+        try:
+            from docling_core.types.doc import DoclingDocument
+            doc = DoclingDocument.model_validate_json(open(cache_doc).read())
+            print(f"  loaded docling cache {cache_doc.name}", file=sys.stderr)
+        except Exception as e:
+            print(f"  cache load failed ({e}); re-running docling", file=sys.stderr)
+            doc = None
+    if doc is None:
+        print(f"converting {pdf} via Docling...", file=sys.stderr, flush=True)
+        import time
+        t0 = time.time()
+        doc = docling_convert(pdf)
+        print(f"  conversion took {time.time() - t0:.1f}s", file=sys.stderr)
+        # Persist for future re-segmentation passes.
+        try:
+            open(cache_doc, "w").write(doc.model_dump_json())
+            print(f"  wrote docling cache {cache_doc.name}", file=sys.stderr)
+        except Exception as e:
+            print(f"  WARN: docling cache write failed: {e}", file=sys.stderr)
 
     raw = []
     starts = detect_articles(doc, raw=raw)
@@ -540,6 +564,17 @@ def main():
             "raw_candidates": raw,
         }, f, indent=2)
     print(f"  wrote {raw_out}: {len(raw)} raw candidates", file=sys.stderr)
+
+    # Disk hygiene: once the docling cache is on disk, the PDF is no
+    # longer needed for re-segmentation. Future segmentation passes load
+    # from the cache. The PDF can be re-fetched from IA if ever needed.
+    if cache_doc.exists() and pdf.exists() and not args.keep_pdf:
+        try:
+            sz = pdf.stat().st_size
+            pdf.unlink()
+            print(f"  deleted pdf to free {sz//1024//1024}MB", file=sys.stderr)
+        except Exception as e:
+            print(f"  WARN: pdf delete failed: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

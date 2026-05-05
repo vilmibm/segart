@@ -11,7 +11,8 @@
 #
 # Lock-protected: a second instance exits immediately so two triggers
 # can't fan out parallel docling workers.
-set -euo pipefail
+set -eo pipefail
+# Note: -u dropped because bash 3.2 trips on `${arr[@]}` when arr is empty.
 TMP="${HOME}/tmp/segart/tmp"
 ITEMS_DIR="${SEGART_CACHE:-${TMP}/items}"
 OUT_DIR="${SEGART_OUT_DIR:-${TMP}/tocs}"
