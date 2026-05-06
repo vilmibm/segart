@@ -144,19 +144,22 @@ def _bbox_x(t):
     return bb.get("l") or 0, bb.get("r") or 0
 
 
-def _entries_in_table(tbl, by_page):
-    """Yield (title, declared_page) entries via layout-aware row parsing.
+def _anchored_rows(tbl, by_page):
+    """Yield (title_string, declared_page_str, declared_page_int) for each
+    TOC row in `tbl` that's anchored by a right-edge page-number token.
 
-    Real journal TOCs are 2-column: a wide title/author column on the left
-    (x_l roughly 50-450) and a narrow page-number column at the right edge
-    (x_l > 450 for letter-sized pages). The previous extractor used
-    page-number-only tokens as inline boundaries, which fragmented entries
-    and lost the title↔page association whenever the OCR mis-read the
-    right column. This version groups text items into y-rows, identifies
-    the page-number column by x position, and emits one entry per
-    page-number-bearing row plus its title-column siblings (including
-    continuation lines from subsequent rows that have title content but
-    no new page number)."""
+    Anchoring rule: a TOC entry exists only if there's a small-integer
+    item at the right edge of the table region (the page-number column),
+    AND there is title-shaped text at lower x in the same y-row OR in
+    rows that follow until the next anchor. Rows without a right-edge
+    page-number are NOT entries — they're ad copy, masthead, or
+    spillover from a different visual section co-residing in the
+    same docling document_index region.
+
+    This is the key change from the previous flat extraction that pulled
+    every text item in the table region: items without a right-column
+    page-number anchor are no longer treated as TOC entries, eliminating
+    the bulk of the ads-on-TOC-page noise seen in earlier runs."""
     prov = (tbl.get("prov") or [{}])[0]
     page = prov.get("page_no")
     T_bb = prov.get("bbox")
@@ -170,20 +173,17 @@ def _entries_in_table(tbl, by_page):
     if not cands:
         return
 
-    # The page-number column is the right edge of the table region. Use
-    # the table bbox's right edge minus a margin (the column is typically
-    # the last ~50 units of the table width).
     T_r = T_bb.get("r") or 0
-    pg_col_left = T_r - 50
+    pg_col_left = T_r - 80  # right ~80 units = page-number column
 
-    # Group into y-rows: cluster by y_top with ~10-unit gap tolerance.
+    # Group into y-rows; cluster by y_top within ~12 units (typical line height).
     cands.sort(key=lambda t: -y_top(t))
     rows = []
     cur_row = []
     last_y = None
     for t in cands:
         y = y_top(t)
-        if last_y is None or abs(last_y - y) <= 10:
+        if last_y is None or abs(last_y - y) <= 12:
             cur_row.append(t)
         else:
             if cur_row:
@@ -193,60 +193,87 @@ def _entries_in_table(tbl, by_page):
     if cur_row:
         rows.append(cur_row)
 
-    # Walk rows top-down. A row with a page-number-shaped item in the
-    # right column anchors a new entry. Subsequent rows without a page
-    # number but with title-column content are continuations.
-    pending_title_parts = []
-    pending_page_num = None
-
-    def _flush():
-        if not pending_title_parts:
-            return None
-        s = " ".join(pending_title_parts).strip()
-        s = re.sub(r"\s+", " ", s)
-        if len(s) > 5 and re.search(r"[A-Za-z]{3,}", s):
-            return s
-        return None
-
-    out_local = []
-
+    # Find anchor rows (rows containing a right-column page-number token)
+    # and collect the title-text items between consecutive anchors.
+    anchored = []
+    pending_titles = []
     for row in rows:
         row_sorted = sorted(row, key=lambda t: _bbox_x(t)[0])
-        page_num_in_row = None
-        title_parts_in_row = []
+        anchor_pn = None
+        title_parts = []
         for t in row_sorted:
             tx = (t.get("text") or "").strip()
             if not tx:
                 continue
             x_l, _ = _bbox_x(t)
-            # Right-column numeric -> page number.
             if x_l >= pg_col_left and is_pn_token(tx):
-                page_num_in_row = tx
+                anchor_pn = tx
                 continue
-            # Skip items that are pure punctuation or too short to be content.
-            if not re.search(r"[A-Za-z]{3,}", tx) and not re.search(r"\d", tx):
+            if not re.search(r"[A-Za-z]{3,}", tx):
                 continue
-            title_parts_in_row.append(tx)
-
-        if page_num_in_row is not None:
-            # New entry: flush whatever title we were accumulating
-            # (probably belonged to the previous entry without an
-            # OCR'd page number).
-            flushed = _flush()
-            if flushed:
-                out_local.append((flushed, page))  # use docling page as fallback
-            pending_title_parts = list(title_parts_in_row)
-            pending_page_num = page_num_in_row
+            title_parts.append(tx)
+        if anchor_pn is not None:
+            # Real TOC row. Combine anchor's title (this row + any
+            # continuation lines that came BEFORE the next anchor).
+            # Wait — the spec is simpler: the anchor's title is the
+            # left-column items in THE SAME y-row AS the anchor,
+            # plus any subsequent rows without their own anchor.
+            combined = title_parts + pending_titles
+            if combined:
+                s = re.sub(r"\s+", " ",
+                           " ".join(p.strip() for p in combined)).strip()
+                if len(s) > 5 and re.search(r"[A-Za-z]{3,}", s):
+                    try:
+                        anchored.append((s, anchor_pn, int(anchor_pn)))
+                    except ValueError:
+                        pass
+            pending_titles = []
         else:
-            # Continuation line for the current entry, OR a byline only.
-            pending_title_parts.extend(title_parts_in_row)
+            # No anchor: this row is title continuation for the NEXT
+            # entry below (if any). In a top-down walk, we accumulate
+            # these and attach to the next anchored row.
+            pending_titles.extend(title_parts)
 
-    flushed = _flush()
-    if flushed:
-        out_local.append((flushed, page))
+    for entry in anchored:
+        yield entry
 
-    for entry_text, src_page in out_local:
-        yield entry_text, src_page
+
+def _entries_in_table(tbl, by_page):
+    """Backwards-compatible wrapper: yield (title, src_page) pairs for
+    cluster-scoring code that doesn't care about the page-number anchor."""
+    page = ((tbl.get("prov") or [{}])[0]).get("page_no")
+    for title, _pn_str, _pn_int in _anchored_rows(tbl, by_page):
+        yield title, page
+
+
+CONTENTS_HEADING_RE = re.compile(
+    r"\b(?:contents|table\s+of\s+contents)\b", re.IGNORECASE,
+)
+
+
+def _has_contents_heading(by_page, pages):
+    """True if any text item on `pages` (looking near the top of each
+    page, where TOC headings sit) reads 'Contents' or 'Table of
+    Contents'. English-language journals overwhelmingly mark their TOC
+    page this way; non-English would need translated equivalents."""
+    for p in pages:
+        for t in by_page.get(p, []):
+            if t.get("content_layer") == "furniture":
+                continue
+            tx = (t.get("text") or "").strip()
+            if CONTENTS_HEADING_RE.search(tx) and len(tx) <= 60:
+                return True
+    return False
+
+
+def _monotonic_score(page_ints):
+    """Fraction of consecutive pairs in page_ints that are non-decreasing.
+    A clean TOC has near-1.0 (page numbers list articles in order); a
+    cluster of unrelated numbers from ad copy is closer to 0.5."""
+    if len(page_ints) < 2:
+        return 0.0
+    ok = sum(1 for a, b in zip(page_ints, page_ints[1:]) if a <= b)
+    return ok / (len(page_ints) - 1)
 
 
 def extract_toc_entries(d, min_entries=3):
@@ -256,12 +283,13 @@ def extract_toc_entries(d, min_entries=3):
     item — sometimes a real multi-page TOC, often interleaved with
     advertiser indices and per-chapter mini-TOCs. We cluster the
     `document_index` page numbers by adjacency, then pick the cluster
-    with the most entries that pass `looks_like_article_toc_entry`. This
-    is publisher-position-agnostic: works for front-of-book TOCs,
+    with the strongest TOC signal: most page-number-anchored entries,
+    bonus for monotonically-increasing anchor pages (ad copy and
+    advertiser indices have unordered numbers), bonus for an explicit
+    'Contents' heading on the page (English-language journals print
+    one). Publisher-position-agnostic — works for front-of-book TOCs,
     back-of-book TOCs, and multi-page TOCs alike. Skips the item if no
-    cluster has at least `min_entries` plausible entries — which avoids
-    trusting noisy single-table detections (advertiser indices,
-    per-chapter mini-TOCs)."""
+    cluster has at least `min_entries` anchored entries."""
     by_page = {}
     for t in d.get("texts", []):
         prov = (t.get("prov") or [{}])[0]
@@ -270,7 +298,6 @@ def extract_toc_entries(d, min_entries=3):
             continue
         by_page.setdefault(pn, []).append(t)
 
-    # Cluster document_index tables by adjacent page numbers.
     tables_by_page = {}
     for tbl in d.get("tables", []):
         if tbl.get("label") != "document_index":
@@ -282,24 +309,33 @@ def extract_toc_entries(d, min_entries=3):
     if not runs:
         return [], set()
 
-    # Score each cluster by count of plausible-article entries.
     best_run = None
-    best_score = 0
+    best_score = 0.0
     best_entries = []
     for first, last in runs:
         run_pages = [p for p in tables_by_page if first <= p <= last]
-        entries = []
+        anchored = []  # list of (title, pn_str, pn_int, src_page)
         for p in run_pages:
             for tbl in tables_by_page[p]:
-                for s, page in _entries_in_table(tbl, by_page):
+                for s, pn_str, pn_int in _anchored_rows(tbl, by_page):
                     if looks_like_article_toc_entry(s):
-                        entries.append((s, page))
-        if len(entries) > best_score:
-            best_score = len(entries)
+                        anchored.append((s, pn_str, pn_int, p))
+        if not anchored:
+            continue
+        n_anchored = len(anchored)
+        mono = _monotonic_score([a[2] for a in anchored])
+        # Score: each anchored entry counts 1; monotonicity adds up to
+        # the same total again (so a fully-ordered sequence ≈ doubles
+        # the cluster's weight); explicit "Contents" heading adds a
+        # flat 5 (enough to break ties in favor of the labeled page).
+        heading_bonus = 5.0 if _has_contents_heading(by_page, run_pages) else 0.0
+        score = n_anchored * (1.0 + mono) + heading_bonus
+        if score > best_score:
+            best_score = score
             best_run = (first, last)
-            best_entries = entries
+            best_entries = [(s, p) for s, _, _, p in anchored]
 
-    if best_score < min_entries:
+    if not best_entries or len(best_entries) < min_entries:
         return [], set()
 
     toc_pages = set(p for p in tables_by_page if best_run[0] <= p <= best_run[1])
