@@ -42,17 +42,16 @@ Docling consistently reads `N-1` where IA reads `N`. Off-by-one.
 
 ### Pass 2 — cause of the off-by-one
 
-Comparing leaf counts per item:
+Comparing docling page count against the IA `max(leafNum)` per item:
 
 ```
-docling_pages - ia_leafs across 55 items:
-  delta=0:  6 items
-  delta=+1: 49 items
+docling_pages - max(ia.leafNum) across 55 items:
+  delta=+1: 55 items
 ```
 
-**The downloaded PDFs include one generated leading page** (presumably a cover / title insert) that IA's `page_numbers.json` doesn't index. `page_numbers.json` is keyed off the JP2 leaves; the PDF derivative has the cover prepended. So for 49 of 55 items, `docling.page_no = ia.leafNum + 1`.
+**The off-by-one is uniform across the corpus.** A subsequent pass (May 2026) found that an earlier draft of this comparison reported "6 items with delta=0" — that was a measurement artifact: I was using `len(IA pages)` instead of `max(leafNum)`. About 6 items index `leafNum` starting at 0 instead of 1; that bumps `len()` by one without changing `max(leafNum)`. Once you compare against `max(leafNum)`, every item has delta=+1, which means the conversion `IA_leafNum = docling_page_no − 1` is universally correct (which is why segart's hardcoded `-1` works).
 
-The 6 zero-delta items span multiple publishers and decades — `disability-and-rehabilitation_2014/2015`, `initiatives_summer-1988`, `journal-of-forensic-sciences_1998-01`, `pediatrics_1977-09`, `psychiatric-clinics-of-north-america_1989-06` — no obvious pattern, just artifact of how each PDF was generated. The robust fix is per-item delta detection, not a global constant: `delta = doc_pages - ia_leafs`, applied once per item.
+For the page-number cross-check below, the practical implication is the same — apply the +1 docling shift before keying into IA's data. There's no per-item dispatch to write.
 
 ### Pass 3 — agreement after delta correction
 
@@ -92,7 +91,7 @@ Items where docling can label leaves IA left blank, after delta correction:
 
 2. **Use docling-vs-IA agreement as a confidence boost** on existing IA labels. Disagreements (after delta correction and candidate filtering) are a small enough set to surface for human review or re-OCR.
 
-3. **Per-item delta detection is non-optional.** A global "+1" rule would be wrong for 6 of 55 items observed here. The detection itself is one-line: `delta = len(docling.pages) - len(ia.pages)`.
+3. **A global "+1" shift is sufficient** — apply `IA_leafNum = docling_page_no − 1`. (See the May 2026 correction in §"Pass 2"; an earlier draft suggested per-item dispatch was needed, but that turned out to be an artifact of comparing against `len()` rather than `max(leafNum)`.)
 
 4. **Candidate filter** before scoring: drop tokens that match `^(19|20)\d{2}$` (year), prefer tokens that fit a monotonic ±1 sequence with the previous and next leaf's candidates. Likely lifts agreement from 85.7% well into the 90s.
 
