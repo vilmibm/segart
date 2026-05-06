@@ -30,7 +30,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.13-docling"
+SEGMENTER_VERSION = "0.14-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
 # previously here but matched any sentence starting "Dr. Smith said ..."
@@ -78,8 +78,18 @@ def docling_convert(pdf_path, device="mps"):
     # alongside everything else competing for the same pool.
     dev = AcceleratorDevice.CPU if device == "cpu" else AcceleratorDevice.MPS
     opts = PdfPipelineOptions()
+    # Keep OCR off — IA SIM PDFs are "Text PDFs" with embedded text from
+    # the original scan OCR pass; running RapidOCR again is ~10x slower
+    # for identical results (validated on academic-medicine_1989-02:
+    # 1791s with OCR vs 179s without, byte-identical document_index
+    # cells).
     opts.do_ocr = False
-    opts.do_table_structure = False
+    # Enable layout-aware table structure parsing. Populates
+    # data.table_cells[].text with row/column offsets on tables docling
+    # detects (esp. document_index = TOCs), which is what makes recall
+    # extraction reliable. Adds a few minutes per item over plain
+    # layout, well worth it.
+    opts.do_table_structure = True
     opts.accelerator_options = AcceleratorOptions(device=dev, num_threads=4)
     conv = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
@@ -608,7 +618,26 @@ def main():
             with opener(cache_src, "rt", encoding="utf-8") as fh:
                 doc = DoclingDocument.model_validate_json(fh.read())
             print(f"  loaded docling cache {cache_src.name}", file=sys.stderr)
-            if cache_src is cache_doc_legacy:
+            # Cache-validity check: a cache built before
+            # do_table_structure=True won't have populated cell text on
+            # any table. Detect that by looking for tables-without-text
+            # and force a re-conversion. (Items without any tables look
+            # the same either way; we leave them alone — they're
+            # accepted as fine since structured tables wouldn't have
+            # changed anything for them.)
+            tables = list(getattr(doc, "tables", None) or [])
+            if tables:
+                has_text = any(
+                    (getattr(c, "text", "") or "").strip()
+                    for tbl in tables
+                    for c in getattr(getattr(tbl, "data", None), "table_cells", None) or []
+                )
+                if not has_text:
+                    print("  cache predates do_table_structure; "
+                          "re-converting to populate table cells",
+                          file=sys.stderr)
+                    doc = None
+            if doc is not None and cache_src is cache_doc_legacy:
                 try:
                     with gzip.open(cache_doc_gz, "wt", encoding="utf-8") as fh:
                         fh.write(doc.model_dump_json())
