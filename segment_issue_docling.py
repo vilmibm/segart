@@ -30,7 +30,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.11-docling"
+SEGMENTER_VERSION = "0.12-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
 # previously here but matched any sentence starting "Dr. Smith said ..."
@@ -223,6 +223,18 @@ TABLE_FIGURE_RE = re.compile(
 # never do. Profile run 2026-05 found this pattern on >50% of dropped
 # entries in psychosocial-nursing-mental-health-services_2007.
 TRADEMARK_RE = re.compile(r"[™®©℠]|\(\s*R\s*\)|\(\s*TM\s*\)", re.IGNORECASE)
+
+# Reject titles that contain a credential token preceded by comma/period
+# — i.e., the listing pattern "Name, R.N., Ph.D." that editorial-board
+# pages, contributor lists, and bare-name byline-as-title false positives
+# exhibit. Requiring the comma/period prefix avoids false positives on
+# topical content like "MD-LD Method" where "MD" is part of a phrase.
+CRED_LIST_RE = re.compile(
+    r"[,.]\s*(?:M\.?\s*D\.?|Ph\.?\s*D\.?|MA|MS|MPH|MSc|R\.?\s*N\.?|D\.?\s*O\.?|"
+    r"RD|PhD|Sc\.?\s*D\.?|Jr\.?|Sr\.?|II|III|FRCP|FRCS|FACP|MHA|EdD|DSc|"
+    r"FAAN|CNS|CNAA|APRN|BC|CTN|FACOG|FACS|FACP)\.?\b",
+    re.IGNORECASE,
+)
 
 # v0.6: Section-label prefixes that frequently get glued to the front of
 # article titles when docling treats them as a separate header block
@@ -446,6 +458,8 @@ def detect_articles(doc, raw=None):
         if TABLE_FIGURE_RE.match(title):
             return
         if TRADEMARK_RE.search(title) or TRADEMARK_RE.search(byline_text):
+            return
+        if CRED_LIST_RE.search(title):
             return
         # Reject if the header is followed by ad order-form widgets nearby.
         nearby = ordered[header_start_idx: header_start_idx + 8]
