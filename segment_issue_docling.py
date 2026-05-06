@@ -30,7 +30,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
 SCHEMA_VERSION = 1
-SEGMENTER_VERSION = "0.12-docling"
+SEGMENTER_VERSION = "0.13-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
 # previously here but matched any sentence starting "Dr. Smith said ..."
@@ -187,7 +187,8 @@ SUBSECTION_DENYLIST = {
         "discussion", "conclusion", "conclusions",
         "introduction", "background", "summary",
         "abstract",
-        "references", "bibliography",
+        "references", "reference", "bibliography",
+        "additional references", "further reading", "related articles",
         "acknowledgments", "acknowledgements", "acknowledgment", "acknowledgement",
         "appendix", "appendices",
         "tables", "figures",
@@ -199,13 +200,14 @@ SUBSECTION_DENYLIST = {
         "precautions", "adverse reactions", "dosage and administration",
         "contraindications", "indications", "warnings",
         "how supplied", "prescribing information",
+        "indications and usage", "clinical pharmacology",
         # generic journal section labels
         "communications", "letters to the editor", "letters", "correspondence",
         "editorial", "editorials", "errata", "erratum",
-        "in this issue", "from the editor", "editor's note",
+        "in this issue", "from the editor", "editor's note", "editor",
         "book reviews", "book review", "publications received",
         "address changes", "address correction", "subscriptions",
-        "announcements", "notices", "calendar",
+        "announcements", "notices", "calendar", "official publication",
         "articles", "research articles", "original articles", "invited articles",
         "features", "departments", "news", "abstracts",
         "acknowledgment of reviewers", "past editors",
@@ -233,6 +235,24 @@ CRED_LIST_RE = re.compile(
     r"[,.]\s*(?:M\.?\s*D\.?|Ph\.?\s*D\.?|MA|MS|MPH|MSc|R\.?\s*N\.?|D\.?\s*O\.?|"
     r"RD|PhD|Sc\.?\s*D\.?|Jr\.?|Sr\.?|II|III|FRCP|FRCS|FACP|MHA|EdD|DSc|"
     r"FAAN|CNS|CNAA|APRN|BC|CTN|FACOG|FACS|FACP)\.?\b",
+    re.IGNORECASE,
+)
+
+# Drug-ad inserts often print a section header like "DOSAGE AND
+# ADMINISTRATION:" followed by long product-information copy. The exact
+# string "dosage and administration" is in SUBSECTION_DENYLIST, but the
+# full ad-leading-line includes trailing punctuation + body text that
+# breaks the exact match. This pattern catches the leading-keyword form.
+DRUG_AD_PREFIX_RE = re.compile(
+    r"^(?:dosage\s+and\s+administration|"
+    r"indications(?:\s+and\s+usage)?|"
+    r"contraindications|"
+    r"adverse\s+reactions|"
+    r"precautions|"
+    r"warnings|"
+    r"how\s+supplied|"
+    r"prescribing\s+information|"
+    r"clinical\s+pharmacology)\s*[:.\-]",
     re.IGNORECASE,
 )
 
@@ -460,6 +480,8 @@ def detect_articles(doc, raw=None):
         if TRADEMARK_RE.search(title) or TRADEMARK_RE.search(byline_text):
             return
         if CRED_LIST_RE.search(title):
+            return
+        if DRUG_AD_PREFIX_RE.match(title):
             return
         # Reject if the header is followed by ad order-form widgets nearby.
         nearby = ordered[header_start_idx: header_start_idx + 8]
