@@ -87,16 +87,38 @@ def parse_ill_row(row):
     if not starts or len(starts) != len(stops):
         return None
     params = ff.get("original_request_params") or {}
+    title = normalize(params.get("article_title"))
+    author = normalize(params.get("article_author"))
+    journal = normalize(params.get("journal_title"))
+    issn = normalize(params.get("standard_number"))
+    volume = normalize(params.get("journal_volume"))
+    issue = normalize(params.get("journal_issue"))
+    year = normalize(params.get("journal_year"))
+    pages = normalize(params.get("journal_pages"))
+    # Fallback: ~43% of rows have empty original_request_params but the
+    # patron metadata is still in cover_text. Recover it via parser.
+    if not title and ff.get("cover_text"):
+        from parse_cover_text import parse as parse_cover
+        cv = parse_cover(ff["cover_text"])
+        if cv:
+            title = title or cv.get("article_title")
+            author = author or cv.get("article_author")
+            journal = journal or cv.get("journal_title")
+            issn = issn or cv.get("issn")
+            volume = volume or cv.get("volume")
+            issue = issue or cv.get("issue")
+            year = year or cv.get("year")
+            pages = pages or cv.get("pages")
     return {
         "identifier": identifier,
-        "article_title": normalize(params.get("article_title")),
-        "article_author": normalize(params.get("article_author")),
-        "journal_title": normalize(params.get("journal_title")),
-        "issn": normalize(params.get("standard_number")),
-        "volume": normalize(params.get("journal_volume")),
-        "issue": normalize(params.get("journal_issue")),
-        "year": normalize(params.get("journal_year")),
-        "printed_pages": normalize(params.get("journal_pages")),
+        "article_title": title,
+        "article_author": author,
+        "journal_title": journal,
+        "issn": issn,
+        "volume": volume,
+        "issue": issue,
+        "year": year,
+        "printed_pages": pages,
         "leaf_ranges": [[s, e] for s, e in zip(starts, stops)],
         "unfill_reason": ff.get("unfill_reason"),
     }

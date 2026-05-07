@@ -57,21 +57,65 @@ def page_count(pn_path):
         return 0
 
 
-def fetch_pdf(item):
+def pdf_is_complete(pdf):
+    """Cheap integrity check: PDFs end with %%EOF in the trailer. A truncated
+    download passes existence/size checks but lacks this marker, and docling
+    will reject it as 'not valid'."""
+    try:
+        with open(pdf, "rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - 4096))
+            return b"%%EOF" in fh.read()
+    except OSError:
+        return False
+
+
+def fetch_pdf(item, max_attempts=5):
     item_dir = ITEMS / item
     pdf = item_dir / f"{item}.pdf"
     if pdf.exists():
-        return pdf
+        if pdf_is_complete(pdf):
+            return pdf
+        print(f"  existing {pdf.name} is truncated (no %%EOF); "
+              f"removing and re-downloading", flush=True)
+        pdf.unlink()
     item_dir.mkdir(parents=True, exist_ok=True)
-    print(f"  downloading PDF for {item}...", flush=True)
-    subprocess.run(
-        ["ia", "download", item, "--glob", "*.pdf",
-         "--destdir", str(ITEMS)],
-        check=True, capture_output=True,
+    delays = [10, 30, 60, 120, 240]
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        print(f"  downloading PDF for {item} "
+              f"(attempt {attempt}/{max_attempts})...", flush=True)
+        r = subprocess.run(
+            ["ia", "download", item, "--glob", "*.pdf",
+             "--destdir", str(ITEMS)],
+            capture_output=True, text=True,
+        )
+        ok_exit = r.returncode == 0
+        present = pdf.exists()
+        complete = present and pdf_is_complete(pdf)
+        if ok_exit and complete:
+            return pdf
+        # Surface the failure reason so we can diagnose flakes.
+        err_tail = "\n".join((r.stderr or "").splitlines()[-3:])
+        if not ok_exit:
+            last_err = (f"ia exit={r.returncode}: {err_tail}"
+                        if err_tail else f"ia exit={r.returncode}")
+        elif not present:
+            last_err = f"download reported success but {pdf.name} missing"
+        else:
+            last_err = f"download wrote {pdf.name} but no %%EOF marker"
+        print(f"  download failed: {last_err}", flush=True)
+        if present and not complete:
+            pdf.unlink()  # don't let a partial poison the next attempt
+        if attempt < max_attempts:
+            sleep_s = delays[min(attempt - 1, len(delays) - 1)]
+            print(f"  retrying in {sleep_s}s...", flush=True)
+            time.sleep(sleep_s)
+    raise RuntimeError(
+        f"PDF download for {item} failed after {max_attempts} attempts: "
+        f"{last_err}"
     )
-    if not pdf.exists():
-        raise FileNotFoundError(pdf)
-    return pdf
 
 
 def main():

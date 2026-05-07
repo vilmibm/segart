@@ -330,16 +330,77 @@ def _strip_label_prefix(title):
     return title
 
 
+# Words that can legitimately appear lowercase inside a name (particles,
+# nobiliary prefixes). Anything else lowercase is a sentence-fragment tell.
+_NAME_PARTICLES = {
+    "de", "del", "della", "di", "da", "van", "von", "der", "den",
+    "le", "la", "du", "el", "al", "bin", "ibn", "ben", "y", "ter",
+}
+
+# Capitalized English function words / verbs / pronouns that often start
+# a sentence but never start a real author name. When the byline-detector
+# misclassifies a narrative sentence as a byline (e.g. "As Professor X, ...,
+# has noted, our struggles ..."), naive comma-splitting produces parts
+# whose first word is one of these — we reject them.
+_NON_NAME_LEADING = {
+    "As", "At", "In", "On", "Of", "By", "For", "From", "To", "With",
+    "The", "This", "That", "These", "Those", "Such",
+    "But", "Or", "If", "So", "And", "Nor", "Yet",
+    "Has", "Have", "Had", "Is", "Are", "Was", "Were", "Be", "Been",
+    "Being", "Will", "Would", "Should", "Could", "Can", "May",
+    "Might", "Must", "Do", "Does", "Did",
+    "We", "Our", "Us", "They", "Their", "Them",
+    "He", "His", "Him", "She", "Her", "It", "Its",
+    "I", "My", "Me", "You", "Your",
+    "When", "Where", "Why", "How", "What", "Who",
+    "Also", "Only", "Yet", "Still", "Now", "Then",
+}
+
+
+def _looks_like_author_part(name):
+    """Return True if `name` plausibly is one author name (vs. a sentence
+    fragment from a misclassified byline). A real author name:
+      - is 1–5 words long, ≤60 chars
+      - starts with a capital letter that isn't an English connector/verb
+      - has at most one fully-lowercase word, and that word must be a
+        recognized name-particle (von, de, della, ...)
+    """
+    if not name or len(name) < 2 or len(name) > 60:
+        return False
+    words = name.split()
+    if not (1 <= len(words) <= 5):
+        return False
+    w0 = words[0]
+    if not w0[:1].isupper():
+        return False
+    if w0 in _NON_NAME_LEADING:
+        return False
+    lower_count = sum(
+        1 for w in words[1:]
+        if w.islower() and w not in _NAME_PARTICLES
+    )
+    if lower_count > 1:
+        return False
+    return True
+
+
 def parse_authors(text):
     body = re.sub(r"^by\s+", "", text, flags=re.IGNORECASE).strip()
     parts = re.split(r"\s*,\s*|\s+and\s+|\s*&\s*|\s*;\s*", body)
     out = []
     for part in parts:
+        # Oxford-comma artefact: ", and X" splits as ", " + "and X" rather
+        # than ", and " — strip a leading connector so "and John Smith"
+        # becomes "John Smith" before name-shape validation.
+        part = re.sub(r"^(?:and|or|&)\s+", "", part, flags=re.IGNORECASE)
         name = CRED_RE.sub("", part).strip(" ,.;-")
-        if name and len(name) > 1 and any(c.isalpha() for c in name):
-            if name.isupper():
-                name = name.title()
-            out.append({"name": name, "affiliation": None})
+        if not name or len(name) <= 1 or not any(c.isalpha() for c in name):
+            continue
+        if name.isupper():
+            name = name.title()
+        if not _looks_like_author_part(name):
+            continue
+        out.append({"name": name, "affiliation": None})
     return out
 
 
