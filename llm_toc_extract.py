@@ -45,23 +45,24 @@ class TOCEntry(BaseModel):
         default_factory=list,
         description="Authors of this entry. Empty if no byline (e.g., editorials, sections).",
     )
-    start_leaf: int = Field(
-        description="1-indexed PDF leaf where the entry begins. This is the `page` "
-                    "field of the layout block carrying this entry's title. "
-                    "Required for every entry."
+    start_page_index: int = Field(
+        description="1-indexed PDF page-index (IA's accessible page index) where "
+                    "the entry begins. This is the `page` field of the layout block "
+                    "carrying this entry's title. Required for every entry."
     )
-    end_leaf: int = Field(
-        description="1-indexed PDF leaf where the entry ends — typically the leaf "
-                    "just before the next entry starts, or the issue's last leaf for "
-                    "the final entry. Equal to start_leaf for single-leaf entries."
+    end_page_index: int = Field(
+        description="1-indexed PDF page-index where the entry ends — typically the "
+                    "page-index just before the next entry starts, or the issue's "
+                    "last page-index for the final entry. Equal to start_page_index "
+                    "for single-page entries."
     )
-    start_page: int = Field(
-        description="Printed page number (NOT leaf number) where the entry begins. "
+    start_page_number: int = Field(
+        description="Printed page number (NOT page-index) where the entry begins. "
                     "Use 0 if no printed page is visible (front/back matter, ads)."
     )
-    end_page: int = Field(
+    end_page_number: int = Field(
         description="Printed page number where the entry ends. Use 0 if not "
-                    "determinable. May equal start_page for a one-page entry."
+                    "determinable. May equal start_page_number for a one-page entry."
     )
     type: Literal[
         "article", "editorial", "review", "letter", "section",
@@ -151,16 +152,19 @@ References, Acknowledgments) as separate entries — they belong to their parent
 article.
 - Titles may span multiple visual lines; merge them into one clean title with \
 single spaces.
-- start_leaf and end_leaf are 1-indexed PDF leaf positions. The `page` field \
-on each input block IS the leaf number. start_leaf is the leaf containing the \
-entry's title. end_leaf is the leaf just before the next entry begins (or the \
-issue's last leaf for the final entry). For a one-page entry, set \
-end_leaf == start_leaf. NEVER omit these — every entry needs them.
-- start_page and end_page are the PRINTED page numbers visible on the page \
-(e.g. "43" printed in the page-number gutter), NOT leaf numbers. They will \
-usually be smaller than the leaf numbers because covers, contents, and front \
-matter come before "page 1". If you can't see the printed page near the entry, \
-use 0.
+- start_page_index and end_page_index are 1-indexed PDF page-index positions \
+(IA's "accessible page index" — the monotonically increasing counter over \
+pages included in BookReader/PDF access). The `page` field on each input \
+block IS the page-index. start_page_index is the page-index containing the \
+entry's title. end_page_index is the page-index just before the next entry \
+begins (or the issue's last page-index for the final entry). For a one-page \
+entry, set end_page_index == start_page_index. NEVER omit these — every \
+entry needs them.
+- start_page_number and end_page_number are the PRINTED page numbers visible \
+on the page (e.g. "43" printed in the page-number gutter), NOT page-indices. \
+They will usually be smaller than the page-indices because covers, contents, \
+and front matter come before "page 1". If you can't see the printed page \
+near the entry, use 0.
 
 Be thorough — include every distinct entry you can identify. Quality matters \
 more than brevity."""
@@ -172,6 +176,11 @@ def main():
     ap.add_argument("--out", default=None,
                     help="Write TOC JSON here (default <item>_toc_llm.json in tmp/tocs)")
     ap.add_argument("--model", default="claude-opus-4-7")
+    ap.add_argument("--max-tokens", type=int, default=32000)
+    ap.add_argument("--effort", choices=("low", "medium", "high", "max"),
+                    default="high",
+                    help="Adaptive-thinking effort. Default 'high' matches API default; "
+                         "lower for faster/cheaper at risk of quality")
     args = ap.parse_args()
 
     doc = load_docling(args.item)
@@ -198,15 +207,16 @@ def main():
     t0 = time.time()
     with client.messages.stream(
         model=args.model,
-        max_tokens=32000,
+        max_tokens=args.max_tokens,
         thinking={"type": "adaptive"},
         system=SYSTEM,
         messages=[{"role": "user", "content": user_text}],
         output_config={
+            "effort": args.effort,
             "format": {
                 "type": "json_schema",
                 "schema": _strict_schema(TOC.model_json_schema()),
-            }
+            },
         },
     ) as stream:
         for _ in stream.text_stream:
@@ -214,7 +224,18 @@ def main():
         msg = stream.get_final_message()
     dt = time.time() - t0
 
-    text = next(b.text for b in msg.content if b.type == "text")
+    text_blocks = [b.text for b in msg.content if b.type == "text"]
+    if not text_blocks:
+        block_types = [getattr(b, "type", "?") for b in msg.content]
+        print(f"\nERROR: response had no text block. "
+              f"stop_reason={msg.stop_reason}; block types={block_types}",
+              file=sys.stderr)
+        # Surface usage so the caller can still see how much we paid for the dud.
+        u = msg.usage
+        print(f"  input tokens: {u.input_tokens}", file=sys.stderr)
+        print(f"  output tokens: {u.output_tokens}", file=sys.stderr)
+        sys.exit(2)
+    text = text_blocks[0]
     toc = TOC.model_validate_json(text)
 
     # Output
@@ -224,7 +245,7 @@ def main():
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({
-        "schema_version": "llm_toc_v1",
+        "schema_version": "llm_toc_v2",
         "item": args.item,
         "model": args.model,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),

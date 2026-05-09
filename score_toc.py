@@ -131,6 +131,15 @@ def _leaf_int(s):
     return int(m.group(1)) if m else None
 
 
+def _ranges(d):
+    """Read either the v2 `page_index_ranges` or legacy `leaf_ranges` from
+    a TOC entry or qa_corpus anchor. Returns the list (possibly empty).
+    The two names are aliases for the same coordinate (IA's accessible
+    page-index `nN` strings)."""
+    if d is None: return []
+    return d.get("page_index_ranges") or d.get("leaf_ranges") or []
+
+
 def leaves_match(anchor_ranges, toc_ranges):
     """Strict: exact equality on the first range pair."""
     if not anchor_ranges or not toc_ranges:
@@ -168,6 +177,55 @@ def end_leaf_offset(anchor_ranges, toc_ranges):
     return t_e - a_e
 
 
+def findable(anchor, entries, start_tol=1, end_overshoot=2):
+    """Practical "is this article findable in the TOC + would the segmenter
+    cut a usable PDF excerpt?" check.
+
+    Pass criteria:
+      - some TOC entry's (title OR author) matches the anchor
+      - that entry's start leaf is within ±start_tol of the anchor's start
+      - that entry's end leaf is between anchor_end + 0 and anchor_end +
+        end_overshoot inclusive (overshoot OK up to a couple leaves;
+        undershoot fails because the article is cut short)
+
+    Returns dict: {"hit": bool, "n_content_candidates": int,
+                   "n_passing": int, "ambiguous": bool}
+    """
+    a_leaves = _ranges(anchor)
+    a_title = anchor.get("article_title")
+    a_author = anchor.get("article_author")
+    if not a_leaves:
+        return {"hit": False, "n_content_candidates": 0, "n_passing": 0, "ambiguous": False}
+    a_s = _leaf_int(a_leaves[0][0])
+    a_e = _leaf_int(a_leaves[0][-1])
+    if a_s is None:
+        return {"hit": False, "n_content_candidates": 0, "n_passing": 0, "ambiguous": False}
+
+    candidates = [
+        e for e in entries
+        if title_match(a_title, e.get("title"))
+        or author_match(a_author, e.get("authors"))
+    ]
+    n_pass = 0
+    for e in candidates:
+        e_leaves = _ranges(e)
+        if not e_leaves: continue
+        e_s = _leaf_int(e_leaves[0][0])
+        if e_s is None or abs(e_s - a_s) > start_tol: continue
+        if a_e is not None:
+            e_e = _leaf_int(e_leaves[0][-1])
+            if e_e is None: continue
+            end_off = e_e - a_e
+            if end_off < 0 or end_off > end_overshoot: continue
+        n_pass += 1
+    return {
+        "hit": n_pass >= 1,
+        "n_content_candidates": len(candidates),
+        "n_passing": n_pass,
+        "ambiguous": n_pass >= 2,
+    }
+
+
 def find_hit(anchor, entries, start_tol=1):
     """Pick the best entry for `anchor`.
 
@@ -180,14 +238,14 @@ def find_hit(anchor, entries, start_tol=1):
          are off (segmenter found the article but on the wrong page)
       5. nothing                                     (`miss`)
     """
-    a_leaves = anchor["leaf_ranges"]
+    a_leaves = _ranges(anchor)
     a_title = anchor.get("article_title")
     a_author = anchor.get("article_author")
 
-    exact = [e for e in entries if leaves_match(a_leaves, e.get("leaf_ranges"))]
+    exact = [e for e in entries if leaves_match(a_leaves, _ranges(e))]
     soft = [
         e for e in entries
-        if leaves_match_soft(a_leaves, e.get("leaf_ranges"), start_tol)
+        if leaves_match_soft(a_leaves, _ranges(e), start_tol)
     ]
 
     for e in exact:
@@ -203,7 +261,7 @@ def find_hit(anchor, entries, start_tol=1):
         if title_match(a_title, e.get("title")) and author_match(a_author, e.get("authors")):
             return e, {
                 "match": "soft",
-                "leaves_strict": leaves_match(a_leaves, e.get("leaf_ranges")),
+                "leaves_strict": leaves_match(a_leaves, _ranges(e)),
                 "leaves_soft": True,
                 "title": True,
                 "author": True,
@@ -243,18 +301,18 @@ def score_toc(corpus_anchors, toc):
     for anchor in corpus_anchors:
         hit, reasons = find_hit(anchor, entries)
         end_off = end_leaf_offset(
-            anchor.get("leaf_ranges"),
-            hit.get("leaf_ranges") if hit else None,
+            _ranges(anchor),
+            _ranges(hit) if hit else None,
         )
         out.append(
             {
                 "item": item,
                 "anchor_title": anchor.get("article_title"),
                 "anchor_author": anchor.get("article_author"),
-                "anchor_leaves": anchor.get("leaf_ranges"),
+                "anchor_page_index_ranges": _ranges(anchor),
                 "matched_entry_title": hit.get("title") if hit else None,
                 "matched_entry_authors": hit.get("authors") if hit else None,
-                "matched_entry_leaves": hit.get("leaf_ranges") if hit else None,
+                "matched_entry_page_index_ranges": _ranges(hit) if hit else None,
                 "matched_entry_id": hit.get("id") if hit else None,
                 "reasons": reasons,
                 "match": reasons["match"],
@@ -307,6 +365,7 @@ def main():
     n_entries_matched = 0
     match_counts = {"exact": 0, "soft": 0, "leaves_only": 0, "content_only": 0, "miss": 0}
     field_counts = {"leaves_strict": 0, "leaves_soft": 0, "title": 0, "author": 0}
+    findable_counts = {"hit": 0, "ambiguous": 0}
     end_offsets = []
     for path in toc_paths:
         with open(path) as f:
@@ -321,7 +380,8 @@ def main():
             )
             continue
         matched_ids = set()
-        for r in score_toc(anchors, toc):
+        entries = toc.get("entries") or []
+        for anchor, r in zip(anchors, score_toc(anchors, toc)):
             n_anchors += 1
             match_counts[r["match"]] += 1
             for k in field_counts:
@@ -331,6 +391,10 @@ def main():
                 matched_ids.add(r["matched_entry_id"])
             if r.get("end_offset") is not None and r["match"] in ("exact", "soft", "content_only"):
                 end_offsets.append(r["end_offset"])
+            f_res = findable(anchor, entries)
+            r["findable"] = f_res
+            if f_res["hit"]: findable_counts["hit"] += 1
+            if f_res["ambiguous"]: findable_counts["ambiguous"] += 1
             fout.write(json.dumps(r, ensure_ascii=False) + "\n")
         n_entries_matched += len(matched_ids)
 
@@ -341,6 +405,8 @@ def main():
         full_n = match_counts["exact"] + match_counts["soft"]
         print(f"\nscored {n_anchors} anchors over {n_entries_total} TOC entries", file=sys.stderr)
         print(f"  hit (exact|soft):       {pct(full_n)}", file=sys.stderr)
+        print(f"  findable:               {pct(findable_counts['hit'])}  "
+              f"(ambiguous: {findable_counts['ambiguous']})", file=sys.stderr)
         print(f"    exact leaves:         {match_counts['exact']}", file=sys.stderr)
         print(f"    soft leaves (±1):     {match_counts['soft']}", file=sys.stderr)
         print(f"  leaves-only (no content): {match_counts['leaves_only']}", file=sys.stderr)
