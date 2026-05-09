@@ -35,25 +35,31 @@ def normalize_title(s):
 
 
 def title_match(a, b,
+                first_n=6, first_n_ratio=0.85,
                 token_overlap=0.6, ratio_threshold=0.7,
                 short_min_words=2):
     """Search-style title match: would a user looking for `a` be happy
     with `b` in the result list?
 
-    Strategy:
-      - Normalize both, drop stopwords.
-      - PASS if one is contained in the other (any direction).
+    Strategy (in order; PASS on first hit):
+      - Normalize both: lowercase, drop punctuation, drop stopwords.
+      - PASS if normalized strings are equal.
+      - PASS if the first `first_n` content-bearing words on each side
+        agree at SequenceMatcher ratio ≥ `first_n_ratio` (0.85). This
+        is the segart house rule: leading content words are very
+        discriminating, the tail is often where author names, journal
+        affiliations, or OCR garbage gets concatenated. Default 6
+        words is enough to disambiguate articles within an issue while
+        absorbing slight typos / OCR errors / case + punctuation
+        differences.
+      - PASS if one normalized string is contained in the other.
       - PASS if shared content words / shorter content words ≥
-        token_overlap (e.g. anchor and entry share ≥60% of the smaller
-        side's meaningful words). Catches "Pedagogic Hegemonicide"
-        matching the full "Pedagogic Hegemonicide and the Asian
-        American Student" plus messy OCR truncations.
-      - PASS if SequenceMatcher ratio ≥ ratio_threshold (loosened from
-        0.85 since we're optimizing for "find the article" not byte
-        equality).
+        token_overlap. Catches OCR truncations.
+      - PASS if SequenceMatcher ratio over the full normalized strings
+        ≥ ratio_threshold.
 
-    Tight enough that an unrelated article won't match (default
-    short_min_words=2 prevents 1-word coincidences).
+    Tight enough that an unrelated article won't match
+    (short_min_words=2 prevents 1-word coincidences).
     """
     na, nb = normalize_title(a), normalize_title(b)
     if not na or not nb:
@@ -63,6 +69,19 @@ def title_match(a, b,
     wa, wb = na.split(), nb.split()
     if len(wa) < short_min_words or len(wb) < short_min_words:
         return False
+    # First-N content-bearing words match (segart house rule). Compare
+    # the leading N words on each side using SequenceMatcher so slight
+    # typos / OCR slips don't kill the match. Use the smaller of N and
+    # the shorter side's word count, so very-short titles still get
+    # a meaningful prefix comparison.
+    n = min(first_n, len(wa), len(wb))
+    if n >= short_min_words:
+        head_a = " ".join(wa[:n])
+        head_b = " ".join(wb[:n])
+        if head_a == head_b:
+            return True
+        if SequenceMatcher(None, head_a, head_b).ratio() >= first_n_ratio:
+            return True
     short, long_ = (na, nb) if len(na) <= len(nb) else (nb, na)
     if f" {short} " in f" {long_} " or long_.startswith(short + " ") or long_.endswith(" " + short):
         return True
@@ -248,23 +267,33 @@ def find_hit(anchor, entries, start_tol=1):
         if leaves_match_soft(a_leaves, _ranges(e), start_tol)
     ]
 
+    # Match policy: title is the primary content signal; author is a
+    # tiebreaker, not a gate. With leaves already matched (exact or soft),
+    # title-OR-author is enough to call it a hit. (The AND policy
+    # previously here blocked many genuine matches where the segmenter
+    # extracted no authors or extracted an alias the surname matcher
+    # didn't recognize — even though the title and leaves agreed.)
+    def _content_ok(e):
+        return (title_match(a_title, e.get("title"))
+                or author_match(a_author, e.get("authors")))
+
     for e in exact:
-        if title_match(a_title, e.get("title")) and author_match(a_author, e.get("authors")):
+        if _content_ok(e):
             return e, {
                 "match": "exact",
                 "leaves_strict": True,
                 "leaves_soft": True,
-                "title": True,
-                "author": True,
+                "title": title_match(a_title, e.get("title")),
+                "author": author_match(a_author, e.get("authors")),
             }
     for e in soft:
-        if title_match(a_title, e.get("title")) and author_match(a_author, e.get("authors")):
+        if _content_ok(e):
             return e, {
                 "match": "soft",
                 "leaves_strict": leaves_match(a_leaves, _ranges(e)),
                 "leaves_soft": True,
-                "title": True,
-                "author": True,
+                "title": title_match(a_title, e.get("title")),
+                "author": author_match(a_author, e.get("authors")),
             }
     if exact:
         e = exact[0]
@@ -277,13 +306,13 @@ def find_hit(anchor, entries, start_tol=1):
         }
     # Content-only fallback: scan all entries
     for e in entries:
-        if title_match(a_title, e.get("title")) and author_match(a_author, e.get("authors")):
+        if _content_ok(e):
             return e, {
                 "match": "content_only",
                 "leaves_strict": False,
                 "leaves_soft": False,
-                "title": True,
-                "author": True,
+                "title": title_match(a_title, e.get("title")),
+                "author": author_match(a_author, e.get("authors")),
             }
     return None, {
         "match": "miss",
