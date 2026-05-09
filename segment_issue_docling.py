@@ -651,27 +651,13 @@ def detect_articles(doc, raw=None):
 def page_index_to_printed_map(pn_path, scandata_path):
     """Build a {BookReader nN integer → printed page string} map.
 
-    page_numbers.json is keyed by scandata leafNum, which can include hidden
-    leaves (typically front/back Color Cards) at positions where BookReader's
-    nN counter doesn't increment. We use scandata.xml to translate from each
-    visible page's BookReader nN to the corresponding scandata leafNum and
-    look up that record in pn.
-
-    Returns (br_n_to_printed, pn_data, page_index).
+    Returns (br_n_to_printed, pn_data, page_index). See `page_index.py`
+    for the underlying mapping logic.
     """
     from page_index import PageIndex
     pn_data = json.load(open(pn_path))
     pi = PageIndex.from_scandata_path(scandata_path)
-    out = {}
-    pn_by_leafnum = {p["leafNum"]: p for p in pn_data.get("pages", [])}
-    for br_n in range(pi.visible_count):
-        leafnum = pi.br_to_scandata(br_n)
-        entry = pn_by_leafnum.get(leafnum)
-        if entry is None:
-            continue
-        ppage = (entry.get("pageNumber") or "").strip() or None
-        out[br_n] = ppage
-    return out, pn_data, pi
+    return pi.br_to_printed(pn_data), pn_data, pi
 
 
 def main():

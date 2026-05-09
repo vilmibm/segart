@@ -121,22 +121,26 @@ def kind_match(predicted, truth, tol=1):
 
 
 def load_page_numbers(item):
-    """Return a dict mapping printed page string → leaf int (0-indexed).
-    Returns None if the file is missing."""
-    path = f"{SEGART}/tmp/items/{item}/{item}_page_numbers.json"
-    if not os.path.exists(path):
+    """Return a dict mapping printed page string → BookReader nN integer
+    (0-indexed). Returns None if the file is missing.
+
+    Uses scandata.xml to translate page_numbers.json's `leafNum`
+    (which is the scandata Scribe-image counter, *including hidden
+    leaves*) to BookReader's visible-only nN. The earlier "leafNum
+    aligns directly with nN" assumption is incorrect for items with
+    hidden leaves at scandata leafNum=0 (front Color Card — the common
+    case) — see page_index.py.
+    """
+    pn_path = f"{SEGART}/tmp/items/{item}/{item}_page_numbers.json"
+    if not os.path.exists(pn_path):
         return None
-    d = json.load(open(path))
-    out = {}
-    for p in d.get("pages") or []:
-        pn = (p.get("pageNumber") or "").strip()
-        ln = p.get("leafNum")
-        if pn and isinstance(ln, int):
-            # Empirical: page_numbers.json's leafNum aligns directly with
-            # the IA `n<N>` URL notation (verified on amerasia 1989 and
-            # BBS 1980-09 against staffer-confirmed ILL anchors).
-            out.setdefault(pn, ln)
-    return out
+    from page_index import PageIndex
+    pn_data = json.load(open(pn_path))
+    try:
+        pi = PageIndex.for_item(item, fetch=True)
+    except Exception:
+        return None
+    return pi.printed_to_br(pn_data)
 
 
 def pdfmaker_predict(item, orig_start, orig_stop):

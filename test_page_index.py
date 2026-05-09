@@ -123,6 +123,30 @@ def test_no_hidden_identity():
 
 # ---------- naive lstrip("n") demonstrates the bug ----------
 
+def test_icp_printed_to_br_correct_offset():
+    """Empirical: pn.leafNum=1 has pageNumber='4'. The new helper should
+    map printed '4' -> BookReader n0, NOT n1 (which the naive
+    `out[printed] = leafNum` would have produced)."""
+    p = pi.PageIndex.for_item(ICP)
+    pn = pi.PageIndex.load_pn(ICP)
+    pmap = p.printed_to_br(pn)
+    assert pmap.get("4") == 0, (
+        f"expected printed '4' -> BookReader n0, got n{pmap.get('4')}"
+    )
+    assert pmap.get("5") == 1
+    assert pmap.get("186") == 7
+
+def test_icp_br_to_printed_inverse():
+    """br_to_printed should be the inverse of printed_to_br for entries
+    that have a printed page."""
+    p = pi.PageIndex.for_item(ICP)
+    pn = pi.PageIndex.load_pn(ICP)
+    fwd = p.printed_to_br(pn)
+    rev = p.br_to_printed(pn)
+    for printed, br_n in fwd.items():
+        assert rev.get(br_n) == printed, f"round-trip failed at printed={printed}"
+
+
 def test_naive_lstrip_diverges_for_hidden_edge_items():
     """Documents the bug the new module fixes: naive int(s.lstrip("n"))
     gives the wrong scandata leafNum for items with hidden leaves at

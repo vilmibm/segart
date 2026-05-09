@@ -191,3 +191,39 @@ class PageIndex:
             return None
         with open(path) as fh:
             return json.load(fh)
+
+    def printed_to_br(self, pn_data: dict) -> dict[str, int]:
+        """Build {printed_page_str → BookReader nN integer} from pn data.
+
+        Replaces the naive `out[printed] = pn.leafNum` pattern, which
+        treated pn.leafNum as if it were a BookReader nN. That's only
+        correct for items with no hidden leaves at scandata leafNum=0;
+        items with a leading Color Card (the common case) get an
+        off-by-one bug under the naive approach.
+        """
+        out: dict[str, int] = {}
+        for entry in pn_data.get("pages", []):
+            printed = (entry.get("pageNumber") or "").strip()
+            if not printed:
+                continue
+            leafnum = entry.get("leafNum")
+            if not isinstance(leafnum, int):
+                continue
+            br_n = self.scandata_to_br(leafnum)
+            if br_n is not None:
+                out.setdefault(printed, br_n)
+        return out
+
+    def br_to_printed(self, pn_data: dict) -> dict[int, Optional[str]]:
+        """Build {BookReader nN integer → printed_page_str or None} from pn data."""
+        pn_by_leafnum = {
+            p["leafNum"]: p for p in pn_data.get("pages", [])
+            if isinstance(p.get("leafNum"), int)
+        }
+        out: dict[int, Optional[str]] = {}
+        for br_n in range(self.visible_count):
+            leafnum = self.br_to_scandata(br_n)
+            entry = pn_by_leafnum.get(leafnum)
+            ppage = (entry.get("pageNumber") or "").strip() if entry else ""
+            out[br_n] = ppage or None
+        return out
