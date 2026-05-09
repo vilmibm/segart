@@ -12,3 +12,10 @@ ill_logs_*.csv
 # Persistent run cache (PDFs, page_numbers, TOC outputs, sample lists, corpus)
 # Lives here instead of /tmp so it survives reboot.
 tmp/
+
+# Editor noise (emacs autosave / lock files)
+\#*\#
+.\#*
+
+# Claude Code local config / session state
+.claude/
