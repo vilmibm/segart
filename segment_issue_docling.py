@@ -67,6 +67,24 @@ def fetch_page_numbers(item, cache_dir):
     return pn
 
 
+def fetch_scandata(item, cache_dir):
+    """Pull `<item>_scandata.xml` so we can map BookReader nN ↔ scandata leafNum.
+
+    This is required for items with hidden leaves (e.g. Color Cards at the
+    scan boundaries — the common case): without it, page_numbers.json's
+    `leafNum` does not align with BookReader nN integers, leading to
+    off-by-one printed-page assignments.
+    """
+    item_dir = cache_dir / item
+    sd = item_dir / f"{item}_scandata.xml"
+    if not sd.exists():
+        subprocess.run(
+            ["ia", "download", item, "--glob", "*scandata.xml", "--destdir", str(cache_dir)],
+            check=True, capture_output=True,
+        )
+    return sd
+
+
 def docling_convert(pdf_path, device="mps"):
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
@@ -630,15 +648,30 @@ def detect_articles(doc, raw=None):
     return article_starts
 
 
-def leaf_to_page_map(pn_path):
-    data = json.load(open(pn_path))
+def page_index_to_printed_map(pn_path, scandata_path):
+    """Build a {BookReader nN integer → printed page string} map.
+
+    page_numbers.json is keyed by scandata leafNum, which can include hidden
+    leaves (typically front/back Color Cards) at positions where BookReader's
+    nN counter doesn't increment. We use scandata.xml to translate from each
+    visible page's BookReader nN to the corresponding scandata leafNum and
+    look up that record in pn.
+
+    Returns (br_n_to_printed, pn_data, page_index).
+    """
+    from page_index import PageIndex
+    pn_data = json.load(open(pn_path))
+    pi = PageIndex.from_scandata_path(scandata_path)
     out = {}
-    for entry in data.get("pages", []):
+    pn_by_leafnum = {p["leafNum"]: p for p in pn_data.get("pages", [])}
+    for br_n in range(pi.visible_count):
+        leafnum = pi.br_to_scandata(br_n)
+        entry = pn_by_leafnum.get(leafnum)
+        if entry is None:
+            continue
         ppage = (entry.get("pageNumber") or "").strip() or None
-        leaf = entry.get("leafNum")
-        if leaf is not None:
-            out[leaf] = ppage
-    return out, data
+        out[br_n] = ppage
+    return out, pn_data, pi
 
 
 def main():
@@ -661,10 +694,13 @@ def main():
     cache_doc_gz = item_dir / f"{args.item}_docling.json.gz"
     cache_doc_legacy = item_dir / f"{args.item}_docling.json"
 
-    # Page-number JSON is small; always fetch.
+    # Page-number JSON and scandata are both small; always fetch. scandata
+    # is needed so page_numbers.json's `leafNum` (scandata-numbered) can be
+    # correctly translated to BookReader nN — see page_index.py.
     pn = fetch_page_numbers(args.item, cache_dir)
-    leaf_to_page, pn_data = leaf_to_page_map(pn)
-    leaf_count = max((p["leafNum"] for p in pn_data.get("pages", [])), default=0)
+    sd = fetch_scandata(args.item, cache_dir)
+    leaf_to_page, pn_data, pi = page_index_to_printed_map(pn, sd)
+    leaf_count = pi.visible_count
 
     # Cache-first flow: if a cached docling exists we load it and SKIP
     # fetching the PDF entirely. Cache is gzip-compressed (~7x smaller);
