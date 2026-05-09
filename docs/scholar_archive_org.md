@@ -31,7 +31,7 @@ Entities cross-reference by `ident`, not revision, so metadata can evolve while 
 
 ## What fatcat does *not* give us
 
-- **No leaf or page numbers.** `release.pages` is printed-page numbers (e.g. `"1273-1278"`), not leaf indices. Linking each release to its `start_leaf`/`stop_leaf` inside the IA scan is exactly what segart must produce. Fatcat suggests *which* articles to look for; segart determines *where* in the leaf stack each lives — and whether each candidate is actually present.
+- **No page-index or printed-page anchors.** `release.pages` is printed-page numbers (e.g. `"1273-1278"`), not page indices. Linking each release to its `start_page_index`/`stop_page_index` inside the IA scan is exactly what segart must produce. Fatcat suggests *which* articles to look for; segart determines *where* in the page stack each lives — and whether each candidate is actually present.
 - **`file.urls` is often empty.** Many IA-held files are "dark" preservation-only and carry no public URLs in the fatcat record. The archive.org link rendered on scholar work pages is constructed at render time from container + release metadata, not stored on the file.
 - **Patchy ext_id coverage.** Pre-1970 and many non-English titles lack DOIs. ILL log → fatcat matching has to fall back to fuzzy title + container + volume/issue/year matching when no DOI is present.
 

@@ -30,6 +30,27 @@ That covers some of what segart needs but is missing: `leaf` (the BookReader plu
 
 segart publishes a rich, segart-native TOC alongside each IA item, named `<item>_toc.json`. It is the source of truth. A narrower BookReader-compatible projection can be derived from it later, either by an IA-side bootstrap change or a BookReader plugin extension — both are feature requests segart files but does not block on.
 
+## Terminology: leaf vs. page index vs. leafNum
+
+Three distinct integers are floating around for "where in the scan is this page," and they do not always agree. This is foundational to reading the schema below correctly.
+
+| Term | Source | What it counts | Index base |
+|---|---|---|---|
+| **scandata leafNum** | `<item>_scandata.xml` | Every captured Scribe image, *including* hidden ones (color cards, foldouts, scribe targets) | 0-indexed |
+| **page_numbers.json `leafNum`** | `<item>_page_numbers.json` | Same as scandata leafNum (uses scandata's numbering), but some `pageType`s are filtered out per item (Title pages, etc.) | 0- or 1-indexed depending on what's filtered |
+| **page index** (BookReader `nN`) | URL `/page/nN/`, segart's `_toc.json` | Visible-only access counter — only `addToAccessFormats=true` pages | 0-indexed |
+
+Strictly, a *leaf* is a physical sheet of paper (one leaf = recto + verso = two pages). All three of the above count *page sides*, not physical leaves — IA, BookReader, and ILL logs all call them "leaves" but the name is a misnomer. Segart's schema calls this **page index** consistently.
+
+**Why all three coexist:** scandata is the master scan record. BookReader is the user-facing access layer (skips hidden images). page_numbers.json is keyed by scandata's index but selectively omits some entries by pageType. So:
+
+- BookReader `n0` ≠ scandata `leafNum=0` whenever there's a hidden front Color Card (the common case — IA samples here show this in 113 of 161 local items).
+- pn.leafNum ≠ BookReader nN whenever pn omits a leading scandata entry (also common — pn often skips the Title page).
+
+**Crossing formats requires the mapper in `page_index.py`.** Within a single TOC, page-index integers can be compared and ordered directly. To look up a printed-page string in `_page_numbers.json` from a BookReader `nN`, or to translate a scandata leafNum into a BookReader page index, use `PageIndex.for_item(item)` and its helpers. Naive `int(s.lstrip("n"))` against pn data produces the off-by-one bug class fixed in 2026-05-09 commits.
+
+Where docs quote an external system's literal field name (`leafNum`, BookReader's `leaf`, ILL log `start`/`stop` of "leaf identifiers"), the original name is preserved verbatim — but the underlying value is a page index, not a leaf.
+
 ## File schema (v2)
 
 One JSON object per IA item, written to `<item>_toc.json` in the item's file group.

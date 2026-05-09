@@ -2,7 +2,9 @@
 
 ## Question
 
-For Internet Archive periodical items, the canonical printed-page label for each leaf comes from `<item>_page_numbers.json` — produced by an IA-side OCR pass over running headers/footers. Docling's PDF layout pass also typed-labels running headers/footers (as `page_footer` / `page_header` items in `content_layer: "furniture"`), and that text frequently contains the printed page number. Can docling improve on the IA-side pipeline?
+For Internet Archive periodical items, the canonical printed-page label for each page index comes from `<item>_page_numbers.json` — produced by an IA-side OCR pass over running headers/footers. Docling's PDF layout pass also typed-labels running headers/footers (as `page_footer` / `page_header` items in `content_layer: "furniture"`), and that text frequently contains the printed page number. Can docling improve on the IA-side pipeline?
+
+> **Terminology**: this document predates the 2026-05-09 leaf→page-index rename. Most uses of "leaf" below are the page-index sense; references to IA's actual `leafNum` field (in `_page_numbers.json` and scandata.xml) are kept verbatim because that's the external name. See `toc_format.md` for canonical terminology and `page_index.py` for the module that handles the three-way mapping (BookReader nN ↔ scandata leafNum ↔ pn.leafNum).
 
 ## Method
 

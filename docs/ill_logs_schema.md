@@ -4,11 +4,11 @@ This document describes the schema of the Internet Archive Interlibrary Loan (IL
 
 ## Why these logs matter for segart
 
-When a librarian fulfills an ILL request from an IA scanned periodical, they identify the exact item and leaf range where the requested article lives. Each row therefore asserts:
+When a librarian fulfills an ILL request from an IA scanned periodical, they identify the exact item and page-index range where the requested article lives. Each row therefore asserts:
 
-> "Article X (with title, author, journal/volume/issue/year/pages) is located in IA item Y at leaves [start..stop]."
+> "Article X (with title, author, journal/volume/issue/year/pages) is located in IA item Y at page indices [start..stop]."
 
-This is human-vetted ground truth at scale. Segmenter output for a given item can be evaluated by checking, for each ILL ground-truth article, whether a TOC entry exists with overlapping leaf range and a matching title.
+This is human-vetted ground truth at scale. Segmenter output for a given item can be evaluated by checking, for each ILL ground-truth article, whether a TOC entry exists with overlapping page-index range and a matching title.
 
 ## CSV columns
 
@@ -51,8 +51,8 @@ Two halves: the **query** the patron submitted and the **answer** the staffer re
 | Field | Description |
 |---|---|
 | `identifier` | The IA item containing the article. Same as `source_identifier` in outer CSV. |
-| `start` | **Array** of leaf identifiers (e.g. `["n26"]`) where the article begins. |
-| `stop` | **Array** of leaf identifiers where the article ends. Same length as `start`. |
+| `start` | **Array** of page-index identifiers (e.g. `["n26"]`) where the article begins. The ILL log labels these "leaves"; see note below — they're really page indices. |
+| `stop` | **Array** of page-index identifiers where the article ends. Same length as `start`. |
 | `orig_start`, `orig_stop` | Patron-supplied printed page numbers (strings). |
 | `normalized_orig_start`, `normalized_orig_stop` | Mirror of `start`/`stop`. |
 | `start_time` | Unix int, when the patron submitted. |
@@ -61,17 +61,19 @@ Two halves: the **query** the patron submitted and the **answer** the staffer re
 | `cover_text` | Human-readable summary printed on the delivered PDF. Redundant with structured fields. |
 | `unfill_reason` | Present (e.g. `"Not available."`) when the request could not be delivered. |
 
-### Leaf identifiers
+### Page-index identifiers
 
-Leaves are indexed in the IA Bookreader URL space — `n26` is the 27th leaf image in the scan stack and surfaces as `/page/n26/` in archive.org URLs. `segart` uses these exact strings; do not strip the `n` prefix.
+Page indices are addressed in the IA BookReader URL space — `n26` is the 27th visible image in the scan stack and surfaces as `/page/n26/` in archive.org URLs. `segart` uses these exact strings; do not strip the `n` prefix.
+
+> **Terminology note.** The ILL log calls these "leaves," and IA's `_page_numbers.json` calls them `leafNum` — but strictly, a *leaf* is a physical sheet of paper (one leaf = recto + verso = two pages), so the popular usage is a misnomer. The integer counts page sides, not leaves, and (in BookReader's `nN`) skips hidden images (color cards, foldouts, scribe targets). segart treats these consistently as **page indices**. See `toc_format.md` for the canonical terminology.
 
 ## Important quirks
 
-1. **Discontinuous articles.** `start`/`stop` are arrays because some articles span multiple leaf ranges (e.g. front-of-book article continued in back-of-book). Example from sample data: *Glamour* 1993-04, "his and her brains" → `start: ["n241","n281"]`, `stop: ["n244","n283"]`. The TOC schema must support multi-range articles.
+1. **Discontinuous articles.** `start`/`stop` are arrays because some articles span multiple page-index ranges (e.g. front-of-book article continued in back-of-book). Example from sample data: *Glamour* 1993-04, "his and her brains" → `start: ["n241","n281"]`, `stop: ["n244","n283"]`. The TOC schema must support multi-range articles.
 
-2. **Unfilled rows.** Rows with `unfill_reason` (e.g. `"Not available."`) still carry `start`/`stop` populated by the staffer's investigation. Treat as lower-confidence ground truth — the leaf range was identified but the PDF was not delivered through the normal channel.
+2. **Unfilled rows.** Rows with `unfill_reason` (e.g. `"Not available."`) still carry `start`/`stop` populated by the staffer's investigation. Treat as lower-confidence ground truth — the page-index range was identified but the PDF was not delivered through the normal channel.
 
-3. **Duplicates.** The same request can appear twice within seconds (operator retries). Dedupe by `(identifier, article_title, leaf_ranges)` or by `filename`.
+3. **Duplicates.** The same request can appear twice within seconds (operator retries). Dedupe by `(identifier, article_title, page_index_ranges)` or by `filename`.
 
 4. **Whitespace.** `journal_volume`, `journal_issue`, etc. frequently have trailing whitespace. Always `.strip()` before comparing.
 
@@ -95,7 +97,7 @@ The parser emits JSON Lines. One line per article appearance:
   "year": "1961",
   "month": null,
   "printed_pages": "1273-1278",
-  "leaf_ranges": [["n26", "n31"]],
+  "page_index_ranges": [["n26", "n31"]],
   "unfill_reason": null,
   "provider": "rapid",
   "ill_request_id": "26587872",
