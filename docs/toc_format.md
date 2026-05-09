@@ -149,6 +149,14 @@ Multi-range (`leaf_ranges` with more than one pair) is collapsed to the first ra
 
 In an item's file group at archive.org, alongside `<item>_djvu.xml`, `<item>_hocr.html`, etc. The naming follows IA's convention of `<item>_<role>.<ext>`. To upload, segart uses the IA `ia` CLI / S3-compatible API; the file becomes part of the standard derive set. Updating the file (re-segmentation passes) is a normal IA item update.
 
+## Companion: `<item>_articles.json.gz`
+
+`_toc.json` answers *where* in the scan each article lives. A separate companion file, `<item>_articles.json.gz`, answers *what the world knows* about each article — full Crossref payload (with abstracts and references), plus slim projections from fatcat (file linkage), OpenAlex (topics, OA, citation counts), Unpaywall (OA status), and PubMed (MeSH, biomed only).
+
+The two files are linked by **`toc_entry_id`** (the `e<n>` ordinal defined here). Every TOC entry is mirrored in the articles file, including those without DOIs; the articles file uses `match_method` and `match_confidence` to record how (or whether) each entry was tied to upstream metadata.
+
+Full schema: [`articles_format.md`](./articles_format.md).
+
 ## Forward paths (feature requests)
 
 Once segart is producing useful `<item>_toc.json` files at scale, two follow-on requests make BookReader UI display straightforward:
