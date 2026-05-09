@@ -11,7 +11,7 @@ See [`toc_format.md`](./toc_format.md) for the TOC file. The two are linked by *
 
 | | `_toc.json` | `_articles.json.gz` |
 |---|---|---|
-| Source of truth for | Segmentation (leaf ranges per entry) | Bibliographic metadata per entry |
+| Source of truth for | Segmentation (page-index ranges per entry) | Bibliographic metadata per entry |
 | Updated when | Re-segmentation pass runs | External dumps refresh |
 | Size | ~5–20 KB / issue | ~80–200 KB / issue (gzipped: ~30–60 KB) |
 | Required for an item | Yes | No (optional enrichment) |
@@ -83,7 +83,7 @@ Bundling them would couple two very different update cadences and force lightwei
       "match_confidence": 1.0,
 
       "match_signature": {
-        "first_leaf": "n26",
+        "first_page_index": "n26",
         "title_hash": "sha1:abcd1234...",
         "first_page": 1273
       },
@@ -224,7 +224,7 @@ Bundling them would couple two very different update cadences and force lightwei
       "ext_ids": { "fatcat_release": "abc123..." },
       "match_method": "fuzzy_title_volume_issue",
       "match_confidence": 0.78,
-      "match_signature": { "first_leaf": "n31", "title_hash": "sha1:...", "first_page": 1278 },
+      "match_signature": { "first_page_index": "n31", "title_hash": "sha1:...", "first_page": 1278 },
       "crossref":  null,
       "fatcat":    { "release_ident": "abc123...", "files": [] },
       "openalex":  null,
@@ -273,7 +273,7 @@ Bundling them would couple two very different update cadences and force lightwei
 | `ext_ids` | object | All known IDs for this article: `doi`, `pmid`, `pmcid`, `arxiv`, `fatcat_release`, `fatcat_work`, `openalex`. Any subset, all optional. |
 | `match_method` | enum | How this entry was tied to upstream data. See enum below. |
 | `match_confidence` | float `[0,1]` | Confidence in the match (1.0 for `doi_lookup`, lower for fuzzy). |
-| `match_signature` | object \| null | `{first_leaf, title_hash, first_page}` — used to re-tie if `_toc.json` IDs shift. |
+| `match_signature` | object \| null | `{first_page_index, title_hash, first_page}` — used to re-tie if `_toc.json` IDs shift. |
 | `crossref` | object \| null | Full Crossref `/works/{doi}` payload, periodical fields stripped. |
 | `fatcat` | object \| null | Slim — release/work idents, container ident, files[]. |
 | `openalex` | object \| null | Slim — concepts, topics, citation counts, OA, authorships. |
@@ -385,7 +385,7 @@ The articles file is a **function** of (current `_toc.json`) × (current source 
 If `_toc.json` is re-segmented and entry IDs reshuffle (`e1` becomes `e2`, etc.), the articles file becomes invalid by ID. Two recovery paths:
 
 1. **Re-derive from scratch** (preferred). Cheap once dumps are local.
-2. **Re-tie via `match_signature`.** Each entry caches `{first_leaf, title_hash, first_page}`. A best-effort matcher can recover tied identities even if `e1`/`e2` shifted, without re-running the bibliographic join.
+2. **Re-tie via `match_signature`.** Each entry caches `{first_page_index, title_hash, first_page}`. A best-effort matcher can recover tied identities even if `e1`/`e2` shifted, without re-running the bibliographic join.
 
 ## Extension policy
 

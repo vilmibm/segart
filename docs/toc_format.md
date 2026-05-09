@@ -30,13 +30,17 @@ That covers some of what segart needs but is missing: `leaf` (the BookReader plu
 
 segart publishes a rich, segart-native TOC alongside each IA item, named `<item>_toc.json`. It is the source of truth. A narrower BookReader-compatible projection can be derived from it later, either by an IA-side bootstrap change or a BookReader plugin extension — both are feature requests segart files but does not block on.
 
-## File schema (v1)
+## File schema (v2)
 
 One JSON object per IA item, written to `<item>_toc.json` in the item's file group.
 
+> **v1 → v2 changes (2026-05-09):**
+> - Renamed `leaf_count` → `page_index_count` and `leaf_ranges` → `page_index_ranges`. The `nN` values are IA's 0-indexed page-access counter ("page index"), not leaves (a leaf is a physical sheet = recto + verso = two pages). The previous name was a misnomer.
+> - `printed_pages` is now an array of `[start, end]` string pairs (mirroring `page_index_ranges`), so split / continued articles can carry non-contiguous printed-page ranges. Was a single string in v1.
+
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "item": "sim_new-england-journal-of-medicine_1961-12-28_265_26",
   "pub_collection": "pub_new-england-journal-of-medicine",
   "container_id": "td5cjnem25b35nugn4qftmwcna",
@@ -46,7 +50,7 @@ One JSON object per IA item, written to `<item>_toc.json` in the item's file gro
   "issue": "26",
   "issue_date": "1961-12-28",
   "year": 1961,
-  "leaf_count": 105,
+  "page_index_count": 105,
   "generated_at": "2026-05-04T12:00:00Z",
   "generator": {
     "name": "segart",
@@ -73,8 +77,8 @@ One JSON object per IA item, written to `<item>_toc.json` in the item's file gro
           "affiliation": "Associate professor of bacteriology and immunology, Harvard Medical School"
         }
       ],
-      "leaf_ranges": [["n26", "n31"]],
-      "printed_pages": "1273-1278",
+      "page_index_ranges": [["n26", "n31"]],
+      "printed_pages": [["1273", "1278"]],
       "ext_ids": {
         "doi": "10.1056/NEJM196112282652601",
         "pmid": "14462856",
@@ -94,16 +98,16 @@ One JSON object per IA item, written to `<item>_toc.json` in the item's file gro
 
 | Field | Type | Notes |
 |---|---|---|
-| `schema_version` | int | Bumped when breaking changes happen. v1 here. |
+| `schema_version` | int | Bumped when breaking changes happen. v2 here. |
 | `item` | str | The IA item identifier. |
 | `pub_collection` | str \| null | The IA `pub_*` slug, when known (see `match_pub_to_fatcat.py`). |
 | `container_id` | str \| null | Fatcat container ident, when matched. |
 | `issn` | str \| null | ISSN-L preferred. |
 | `journal_title`, `volume`, `issue`, `issue_date`, `year` | various | Standard issue-level metadata. |
-| `leaf_count` | int | Total leaves in the scan; useful for sanity-checking ranges. |
+| `page_index_count` | int | Total page indices (IA `nN` access-counter values) in the scan; useful for sanity-checking ranges. |
 | `generated_at` | ISO 8601 | When this TOC was produced. |
 | `generator` | object | `{name, version, method}` — provenance for the run that produced this TOC. |
-| `entries` | array | Articles and other items, in physical-leaf order. |
+| `entries` | array | Articles and other items, in physical-page order. |
 
 ### Per-entry fields
 
@@ -114,8 +118,8 @@ One JSON object per IA item, written to `<item>_toc.json` in the item's file gro
 | `title` | str \| null | The article title. |
 | `subtitle` | str \| null | If printed separately. |
 | `authors` | array \| null | Each: `{name, affiliation?, fatcat_creator?}`. Empty array allowed for known-anonymous; null for unknown. |
-| `leaf_ranges` | array of `[start, end]` pairs | Leaf identifiers (`n<int>` strings) following IA convention. Multi-range supported for split articles. **Required.** |
-| `printed_pages` | str \| null | As-printed page range, e.g. `"1273-1278"`. |
+| `page_index_ranges` | array of `[start, end]` pairs | Page-index identifiers (IA's 0-indexed `n<int>` access-counter strings). Multi-range supported for split / continued articles. **Required.** |
+| `printed_pages` | array of `[start, end]` string pairs \| null | As-printed page ranges, e.g. `[["1273", "1278"]]` or `[["S1", "S4"], ["A12", "A12"]]`. Strings (not ints) since printed pages can be Roman (`i`–`iv`), prefixed (`S1`, `e2`), or letter-suffixed. Mirrors the multi-range shape of `page_index_ranges`. Null when the printed pagination is unknown. |
 | `ext_ids` | object | `{doi, pmid, pmcid, arxiv, fatcat_release, fatcat_work, scholar_work, ...}` — any combination, all optional. |
 | `confidence` | float in `[0,1]` | Overall confidence segart has in this entry. |
 | `evidence` | array of str | Which signals support this entry: `ill` (matched an ILL log), `scholar` (matches a fatcat release for this `(container, volume, issue)`), `ocr` (LLM-extracted from scan only), `manual` (human curator). Empty array means unsupported. |
@@ -137,13 +141,13 @@ A consumer wanting to feed BookReader's chapters plugin can derive an OL-compati
 | `level` | `entry.level` |
 | `label` | `entry.label` |
 | `title` | `entry.title` |
-| `pagenum` | `entry.printed_pages.split('-')[0]` (or null) |
-| `leaf` | int(`entry.leaf_ranges[0][0]`.lstrip("n")) |
+| `pagenum` | `entry.printed_pages[0][0]` (or null) |
+| `leaf` | `int(entry.page_index_ranges[0][0].lstrip("n"))` — note BookReader's `leaf` field is also a misnomer for page-index, but we project to it as named for compatibility |
 | `authors` | `entry.authors` (already shaped compatibly; OL uses `{name, author?}`) |
 | `subtitle` | `entry.subtitle` |
 | `description` | optionally a one-line synthesized abstract |
 
-Multi-range (`leaf_ranges` with more than one pair) is collapsed to the first range's start in the projection, since OL's TocEntry has no equivalent. The full ranges remain in the segart file.
+Multi-range (`page_index_ranges` with more than one pair) is collapsed to the first range's start in the projection, since OL's TocEntry has no equivalent. The full ranges remain in the segart file. Same applies to `printed_pages`.
 
 ## Where the file lives
 
