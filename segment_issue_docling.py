@@ -29,7 +29,7 @@ from pathlib import Path
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 CACHE = Path(os.environ.get("SEGART_CACHE", "/tmp/segart_items"))
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SEGMENTER_VERSION = "0.14-docling"
 
 # Academic / clinical credentials that often follow a byline. `Dr.` was
@@ -765,14 +765,23 @@ def main():
         )
         if end_leaf < start_leaf:
             end_leaf = start_leaf
-        printed = leaf_to_page.get(start_leaf)
+        # printed_pages: v2 is array of [start, end] string pairs (mirroring
+        # page_index_ranges), so split / continued articles can carry
+        # non-contiguous printed-page ranges. We only know one range from
+        # the segmenter; if neither end is OCR'd, store null.
+        start_pp = leaf_to_page.get(start_leaf)
+        end_pp = leaf_to_page.get(end_leaf)
+        if start_pp is None and end_pp is None:
+            printed_pages = None
+        else:
+            printed_pages = [[start_pp, end_pp if end_pp is not None else start_pp]]
         entries.append({
             "id": f"e{i+1}",
             "type": "article",
             "title": s["title"],
             "authors": s["authors"] if s["authors"] else None,
-            "leaf_ranges": [[f"n{start_leaf}", f"n{end_leaf}"]],
-            "printed_pages": printed,
+            "page_index_ranges": [[f"n{start_leaf}", f"n{end_leaf}"]],
+            "printed_pages": printed_pages,
             "ext_ids": {},
             "confidence": 0.7,
             "evidence": s.get("evidence") or ["ocr"],
@@ -782,7 +791,7 @@ def main():
     toc = {
         "schema_version": SCHEMA_VERSION,
         "item": args.item,
-        "leaf_count": leaf_count,
+        "page_index_count": leaf_count,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": {
             "name": "segart",
@@ -803,7 +812,7 @@ def main():
     with open(raw_out, "w") as f:
         json.dump({
             "item": args.item,
-            "leaf_count": leaf_count,
+            "page_index_count": leaf_count,
             "generator_version": SEGMENTER_VERSION,
             "raw_candidates": raw,
         }, f, indent=2)
