@@ -104,11 +104,7 @@ def main():
         "year": d.get("year"),
         "page_index_count": page_index_count,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "generator": {
-            "name": "segart",
-            "version": "heur_xref_v2_repair",
-            "method": "crossref+page_numbers+repair_running_headers",
-        },
+        "generator": {"name": "segart"},
         "software_versions": software_versions(),
         "entries": legacy_entries,
     }, indent=2))

@@ -96,7 +96,7 @@ companion = {
     "issue_editors": [],
     "provenance": {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "generator": {"name": "segart-articles-builder", "version": "pilot"},
+        "generator": {"name": "segart"},
         "software_versions": software_versions(),
         "sources": {
             "crossref": {"via": "live_api_cached", "fetched_at": "2026-05-11"},
