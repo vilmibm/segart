@@ -59,18 +59,25 @@ def make_review_body(method: str) -> str:
 
 
 def _ia_credentials():
-    """Read S3-style access keys from ~/.config/ia.ini (the file the
+    """Read S3-style access keys from the IA CLI's config (the file the
     `ia configure` CLI writes). Returns (access_key, secret_key) or
     raises FileNotFoundError / KeyError."""
-    path = Path.home() / ".config" / "ia.ini"
-    if not path.exists():
-        raise FileNotFoundError(
-            f"IA credentials not found at {path}. Run `ia configure` first."
-        )
-    cfg = configparser.ConfigParser()
-    cfg.read(path)
-    # The ia CLI writes section [s3] with keys access and secret.
-    return cfg["s3"]["access"], cfg["s3"]["secret"]
+    # The `ia` CLI checks ~/.config/internetarchive/ia.ini first,
+    # then ~/.ia. Mirror that.
+    candidates = [
+        Path.home() / ".config" / "internetarchive" / "ia.ini",
+        Path.home() / ".ia",
+    ]
+    for p in candidates:
+        if p.exists():
+            cfg = configparser.ConfigParser()
+            cfg.read(p)
+            # The ia CLI writes section [s3] with keys access and secret.
+            return cfg["s3"]["access"], cfg["s3"]["secret"]
+    raise FileNotFoundError(
+        f"IA credentials not found in any of {[str(p) for p in candidates]}. "
+        "Run `ia configure` first."
+    )
 
 
 def post_ia_review(item: str, body: str, *, title: str = DEFAULT_REVIEW_TITLE,
@@ -122,16 +129,20 @@ def _ia_upload(item: str, local_path: Path, remote_name: str, *,
 def publish_atomically(item: str, toc: dict, articles: dict,
                        review_body: str, *,
                        review_title: str = DEFAULT_REVIEW_TITLE,
+                       docling_path: Optional[Path] = None,
                        dry_run: bool = False) -> dict:
-    """Write the three-file unit (_toc.json + _articles.json.gz + IA review)
-    as a unit. Returns a result dict with what was published.
+    """Publish the per-item unit to an IA item: _toc.json + _articles.json.gz
+    + optional _docling.json.gz + IA review. Returns a result dict.
 
-    Atomicity: this is a best-effort sequence. If the IA APIs are
-    available at all, all three are expected to land. Partial-failure
-    recovery on the consumer side is just "look at what's there." There
-    is no rollback — IA writes are durable. To get strict atomicity we'd
-    need a precondition check (does the item already have a current TOC?
-    is the publication-in-progress flag set?) — implement later if needed.
+    Atomicity: best-effort sequence. If the IA APIs are available at all,
+    all parts are expected to land. Partial-failure recovery on the
+    consumer side is just "look at what's there." There is no rollback —
+    IA writes are durable.
+
+    docling_path: if a local _docling.json.gz cache exists for this item,
+    pass it in and it'll be uploaded too. Future heurxref re-runs and
+    downstream tools (LLM segmentation, IA derivatives) benefit from
+    having the cached docling sitting alongside the source PDF.
     """
     # 1. Validate inputs minimally before any external write.
     if not toc or "schema_version" not in toc:
@@ -141,8 +152,9 @@ def publish_atomically(item: str, toc: dict, articles: dict,
     if not review_body or not review_body.strip():
         raise ValueError("review_body cannot be empty")
 
-    # 2. Write side files locally first, then upload (decoupled, so we
-    # can verify before pushing).
+    docling_uploaded = False
+
+    # 2. Write side files locally first, then upload.
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         toc_path = td / f"{item}_toc.json"
@@ -151,16 +163,26 @@ def publish_atomically(item: str, toc: dict, articles: dict,
         with gzip.open(articles_path, "wt", encoding="utf-8") as fh:
             json.dump(articles, fh)
 
-        # 3. Upload both side files. If either fails, do NOT post the
-        # review — we don't want a misleading review on the item without
-        # the TOC.
         _ia_upload(item, toc_path, f"{item}_toc.json", dry_run=dry_run)
         _ia_upload(item, articles_path, f"{item}_articles.json.gz",
                    dry_run=dry_run)
 
+        # 3. Optionally upload the docling cache if we have one. Always
+        # name it <item>_docling.json.gz so downstream tools find it
+        # alongside the source PDF.
+        if docling_path is not None:
+            docling_path = Path(docling_path)
+            if docling_path.exists():
+                _ia_upload(item, docling_path, f"{item}_docling.json.gz",
+                           dry_run=dry_run)
+                docling_uploaded = True
+            else:
+                print(f"WARN: docling_path {docling_path} does not exist; "
+                      f"skipping docling upload", file=sys.stderr)
+
         # 4. Post the review. If this fails, the side files are already
         # up — the review is the trust signal; log loudly but don't
-        # unwind. (Future: handle by retrying the review post.)
+        # unwind. (Future: retry the review post.)
         review_resp = post_ia_review(item, review_body, title=review_title,
                                      dry_run=dry_run)
         if not review_resp.get("success"):
@@ -172,6 +194,7 @@ def publish_atomically(item: str, toc: dict, articles: dict,
         "item": item,
         "toc_uploaded": True,
         "articles_uploaded": True,
+        "docling_uploaded": docling_uploaded,
         "review_posted": True,
         "review_body": review_body,
         "dry_run": dry_run,
@@ -184,6 +207,14 @@ def main():
     ap.add_argument("--toc", required=True, help="Path to local <item>_toc.json")
     ap.add_argument("--articles", required=True,
                     help="Path to local <item>_articles.json or .json.gz")
+    ap.add_argument("--docling", default=None,
+                    help="Path to local <item>_docling.json.gz cache. If "
+                         "provided, uploaded alongside the TOC. If omitted, "
+                         "the publisher tries the conventional location "
+                         "~/tmp/segart/tmp/items/<item>/<item>_docling.json.gz "
+                         "and uploads if found.")
+    ap.add_argument("--no-docling", action="store_true",
+                    help="Skip the conventional-location docling-upload guess")
     ap.add_argument("--method", required=True,
                     choices=sorted(REVIEW_BODIES.keys()),
                     help="Which pipeline produced this TOC")
@@ -201,10 +232,21 @@ def main():
     else:
         articles = json.loads(art_path.read_text())
 
+    # Pick docling path: --docling arg > conventional location > none
+    docling_path = None
+    if args.docling:
+        docling_path = Path(args.docling)
+    elif not args.no_docling:
+        conventional = (Path.home() / "tmp" / "segart" / "tmp" / "items"
+                        / args.item / f"{args.item}_docling.json.gz")
+        if conventional.exists():
+            docling_path = conventional
+
     result = publish_atomically(
         args.item, toc, articles,
         review_body=make_review_body(args.method),
         review_title=args.review_title,
+        docling_path=docling_path,
         dry_run=args.dry_run,
     )
     print(json.dumps(result, indent=2))
