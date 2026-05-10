@@ -130,6 +130,8 @@ One JSON object per IA item, written to `<item>_toc.json` in the item's file gro
 | `generator` | object | `{name, version, method}` — provenance for the run that produced this TOC. |
 | `entries` | array | Articles and other items, in physical-page order. |
 
+A per-publication **audit trail / review** (which pipeline ran, why the item was eligible, gate decisions, confidence) is published as a **review on the IA item itself** (via the IA review API), not in this file. See the IA-review handling in `tools/publish_toc.py` (Task #13).
+
 ### Per-entry fields
 
 | Field | Type | Notes |
