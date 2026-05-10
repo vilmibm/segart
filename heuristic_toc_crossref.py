@@ -66,6 +66,43 @@ def load_repaired_page_numbers(item):
     return dict(page_to_leaf)
 
 
+_ROMAN_VALUES = {'i': 1, 'v': 5, 'x': 10, 'l': 50, 'c': 100, 'd': 500, 'm': 1000}
+
+
+def _roman_to_int(s):
+    """Convert a Roman numeral string to int, or None if not valid Roman.
+    Used so we can compute page-range lengths for printed-page strings
+    like 'xi-xii' (Preface front matter)."""
+    s = (s or "").strip().lower()
+    if not s or not all(c in _ROMAN_VALUES for c in s):
+        return None
+    total, prev = 0, 0
+    for c in reversed(s):
+        v = _ROMAN_VALUES[c]
+        if v < prev: total -= v
+        else:        total += v
+        prev = v
+    return total if total > 0 else None
+
+
+def _page_to_int(s):
+    """Parse a printed-page string to an integer, accepting Arabic or
+    Roman numerals. Returns None if neither pattern fits."""
+    if not s: return None
+    s = str(s).strip()
+    if s.isdigit(): return int(s)
+    return _roman_to_int(s)
+
+
+def _page_range_length(sp, ep):
+    """Number of pages in a printed-page range like ('263','279') or
+    ('xi','xii'). Returns None if the range can't be parsed."""
+    si = _page_to_int(sp); ei = _page_to_int(ep)
+    if si is None or ei is None: return None
+    n = ei - si + 1
+    return n if n > 0 else None
+
+
 def _label_parts(s):
     """Split a vol/iss label that may carry combined-issue notation
     ("21-22", "3/4", "21,22") into its component parts plus the literal
@@ -219,13 +256,22 @@ def find_title_in_docling(title, blocks, hint_leaf=None):
 
 
 def parse_page_range(page_str):
-    """'65-77' → ('65', '77'). '341' → ('341', '341'). '65-' → ('65', None)."""
+    """'65-77' → ('65', '77'). '341' → ('341', '341'). '65-' → ('65', None).
+    Also accepts Roman-numeral pages ('xi-xii' for front matter)."""
     if not page_str: return None, None
     s = page_str.strip()
+    # Arabic-leaning pattern (also matches letter-prefixed like 'S1-S4')
     m = re.match(r"^([A-Za-z]?\d+)\s*[-–—]\s*([A-Za-z]?\d+)?\s*$", s)
     if m:
         return m.group(1), m.group(2) or m.group(1)
     m = re.match(r"^([A-Za-z]?\d+)\s*$", s)
+    if m:
+        return m.group(1), m.group(1)
+    # Roman-numeral range/single (e.g., front matter: 'xi-xii', 'iii')
+    m = re.match(r"^([ivxlcdmIVXLCDM]+)\s*[-–—]\s*([ivxlcdmIVXLCDM]+)?\s*$", s)
+    if m:
+        return m.group(1), m.group(2) or m.group(1)
+    m = re.match(r"^([ivxlcdmIVXLCDM]+)\s*$", s)
     if m:
         return m.group(1), m.group(1)
     return None, None
@@ -326,6 +372,24 @@ def main():
         else:
             sl = el = None
             method = "failed"
+
+        # Final-pass consistency: if we resolved a start page but the end
+        # collapsed to a single leaf (couldn't translate the end of the
+        # range via pn.json — e.g. roman-numeral front matter the IA OCR
+        # didn't recognize), but Crossref tells us the article spans
+        # multiple pages, infer end = start + (range length - 1). Safe on
+        # continuous-pagination items; combined with pn_health restart
+        # pagination skip upstream, no ambiguity.
+        if sl is not None and el == sl:
+            span = _page_range_length(sp, ep)
+            if span is not None and span > 1:
+                el = sl + (span - 1)
+                if method == "title_in_docling":
+                    method = "title_in_docling+xref_span"
+                elif method == "page_numbers_partial":
+                    method = "page_numbers_partial+xref_span"
+                method_counts.setdefault(method, 0)
+
         method_counts[method] += 1
 
         entries.append({
