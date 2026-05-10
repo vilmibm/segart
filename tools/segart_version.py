@@ -12,6 +12,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Segart release version. Bump on user-facing schema or behavioral change.
+# Goes into produced metadata files alongside the git SHA so downstream
+# consumers have a stable identifier to refer to.
+SEGART_VERSION = "1.0.0"
+
 SEGART = Path("/Users/brewster/tmp/segart")
 
 
@@ -63,6 +68,7 @@ def software_versions(extra: dict = None) -> dict:
       - extra fields passed in by caller (e.g. crossref_data_pulled_at)
     """
     out = {
+        "segart_version":     SEGART_VERSION,
         "segart_git_sha":     _safe(_git_sha),
         "segart_git_dirty":   _safe(_git_dirty),
         "python":             sys.version.split()[0],
