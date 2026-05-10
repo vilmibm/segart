@@ -11,10 +11,35 @@ Mirrors `llm_toc_to_legacy.py` (the analogous adapter for the LLM TOC).
 """
 import argparse
 import json
+import re
+import sys
 import time
 from pathlib import Path
 
 SEGART = Path("/Users/brewster/tmp/segart")
+sys.path.insert(0, str(SEGART))
+
+
+def _split_printed_range(s):
+    """Convert a Crossref `page` string ('263-279', '263', 'S1-S4') to
+    the v2 schema's [[start, end]] string-pair form. Returns None if
+    nothing useful can be extracted."""
+    if not s: return None
+    s = str(s).strip()
+    if not s: return None
+    # Single page or hyphen-delimited range
+    m = re.match(r"^([A-Za-z]?\d+[A-Za-z]?)\s*[-\u2013]\s*([A-Za-z]?\d+[A-Za-z]?)$", s)
+    if m:
+        return [[m.group(1), m.group(2)]]
+    # Single page
+    m = re.match(r"^([A-Za-z]?\d+[A-Za-z]?)$", s)
+    if m:
+        return [[m.group(1), m.group(1)]]
+    # Fallback: leave as a single-pair best-guess
+    parts = re.split(r"\s*[-\u2013]\s*", s, maxsplit=1)
+    if len(parts) == 2:
+        return [[parts[0].strip(), parts[1].strip()]]
+    return [[s, s]]
 
 
 def main():
@@ -44,12 +69,24 @@ def main():
             "title": e.get("title") or "",
             "authors": e.get("authors") or None,
             "page_index_ranges": [[f"n{sl}", f"n{el}"]],
-            "printed_pages": e.get("crossref_page") or None,
+            "printed_pages": _split_printed_range(e.get("crossref_page")),
             "ext_ids": {"doi": e["doi"]} if e.get("doi") else {},
             "confidence": 0.7,
             "evidence": [e["_method"]] if e.get("_method") else [],
             "level": 1,
         })
+
+    # Compute page_index_count from the item's scandata via page_index module.
+    page_index_count = None
+    item = d.get("item")
+    if item:
+        try:
+            from page_index import PageIndex
+            pi = PageIndex.for_item(item, fetch=True)
+            page_index_count = pi.visible_count
+        except Exception as e:
+            print(f"  WARN: could not derive page_index_count: {e}",
+                  file=sys.stderr)
 
     out_path = Path(args.out) if args.out else (
         SEGART / "tmp" / "tocs_compare" /
@@ -59,7 +96,11 @@ def main():
     out_path.write_text(json.dumps({
         "schema_version": 2,
         "item": d["item"],
-        "page_index_count": None,
+        "issn": d.get("issn"),
+        "volume": d.get("volume"),
+        "issue": d.get("issue"),
+        "year": d.get("year"),
+        "page_index_count": page_index_count,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "generator": {
             "name": "segart",
