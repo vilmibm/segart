@@ -66,9 +66,46 @@ def load_repaired_page_numbers(item):
     return dict(page_to_leaf)
 
 
+def _label_parts(s):
+    """Split a vol/iss label that may carry combined-issue notation
+    ("21-22", "3/4", "21,22") into its component parts plus the literal
+    full string. Used so a Crossref record with volume "21" matches our
+    query of vol "21-22"."""
+    s = str(s or "").strip()
+    if not s: return {""}
+    parts = {s}
+    for sep in ("-", "/", ","):
+        for p in s.split(sep):
+            p = p.strip()
+            if p: parts.add(p)
+    return parts
+
+
+def _label_matches(crossref_label, query_label):
+    """True iff Crossref's vol/iss label matches our query, allowing for
+    combined-issue notation on either side (e.g. query=21-22 matches
+    crossref=21 or crossref=22; query=21 matches crossref=21-22)."""
+    c = str(crossref_label or "").strip()
+    q = str(query_label or "").strip()
+    if c == q: return True
+    if not c or not q: return False
+    c_parts = _label_parts(c)
+    q_parts = _label_parts(q)
+    return bool(c_parts & q_parts)
+
+
 def fetch_crossref_full(issn, year, vol, iss):
     """Fetch with full fields (DOI, title, author, page, volume, issue),
-    return a list of normalized article dicts."""
+    return a list of normalized article dicts.
+
+    Volume/issue match is tolerant of combined-issue labels: a query for
+    issue "21-22" matches Crossref records with issue "21", "22", or
+    "21-22". This recovers articles for combined-issue IA items where the
+    publisher labels each half issue separately in Crossref. Safe to use
+    only when the issue's pn.json shows continuous (not restart)
+    pagination — see tools/pn_health.py; the production driver should
+    check that before invoking this.
+    """
     try: y = int(str(year)[:4])
     except: return None
     url = (
@@ -83,7 +120,7 @@ def fetch_crossref_full(issn, year, vol, iss):
     for r in data.get("message", {}).get("items", []):
         v = str(r.get("volume", "")).strip()
         i = str(r.get("issue", "")).strip()
-        if v != str(vol).strip() or i != str(iss).strip(): continue
+        if not _label_matches(v, vol) or not _label_matches(i, iss): continue
         ttl = r.get("title")
         if isinstance(ttl, list): ttl = ttl[0] if ttl else ""
         authors = []
