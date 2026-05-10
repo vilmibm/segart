@@ -12,7 +12,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 CORPUS = Path("/Users/brewster/tmp/segart/tmp/qa_corpus.jsonl")
-AUDIT = Path("/tmp/journal_xref_audit.jsonl")
+AUDIT = Path("/Users/brewster/tmp/segart/tmp/audit/journal_xref_audit.jsonl")
 CACHE = Path("/Users/brewster/tmp/segart/tmp/crossref_journal_year_cache")
 
 STOPWORDS = {

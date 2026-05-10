@@ -16,8 +16,8 @@ from collections import defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-AUDIT = Path("/tmp/journal_xref_audit.jsonl")
-PUB_OUT = Path("/tmp/journal_publishers.jsonl")
+AUDIT = Path("/Users/brewster/tmp/segart/tmp/audit/journal_xref_audit.jsonl")
+PUB_OUT = Path("/Users/brewster/tmp/segart/tmp/audit/journal_publishers.jsonl")
 HEADERS = {"User-Agent": "segart-audit-analysis/0.1 (mailto:brewster@archive.org)"}
 MIN_ANCHORS = 30
 
