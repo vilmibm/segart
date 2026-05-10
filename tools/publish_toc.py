@@ -182,13 +182,20 @@ def publish_atomically(item: str, toc: dict, articles: dict,
 
         # 4. Post the review. If this fails, the side files are already
         # up — the review is the trust signal; log loudly but don't
-        # unwind. (Future: retry the review post.)
+        # unwind.
+        # IA's review API returns success=false with error="No change
+        # detected" when an identical review already exists. Treat that
+        # as success (idempotent re-publish).
         review_resp = post_ia_review(item, review_body, title=review_title,
                                      dry_run=dry_run)
         if not review_resp.get("success"):
-            raise RuntimeError(
-                f"IA review POST failed for {item}: {review_resp}"
-            )
+            err = review_resp.get("error") or ""
+            if "no change" in err.lower():
+                pass  # idempotent: identical review already there
+            else:
+                raise RuntimeError(
+                    f"IA review POST failed for {item}: {review_resp}"
+                )
 
     return {
         "item": item,
