@@ -22,6 +22,30 @@ sys.path.insert(0, str(SEGART / "tools"))
 from segart_version import software_versions  # noqa: E402
 
 
+_FRONTMATTER_PATTERNS = re.compile(
+    r"^(preface|foreword|introduction|editorial board|contents"
+    r"|table of contents|editor'?s note|from the editor|editorial"
+    r"|publication information|masthead|in this issue)\b",
+    re.IGNORECASE,
+)
+_BACKMATTER_PATTERNS = re.compile(
+    r"^(index|subject index|author index|bibliography"
+    r"|references|errata|colophon|advertisements?|back matter)\b",
+    re.IGNORECASE,
+)
+
+
+def _classify_entry_type(title, default="article"):
+    """Re-type entries whose titles match standard frontmatter / backmatter
+    labels. Crossref types these as `journal-article` (Elsevier and others
+    DOI even the preface/index pages), but for a TOC consumer it's useful
+    to distinguish so a librarian / BookReader can deprioritize."""
+    t = (title or "").strip()
+    if _FRONTMATTER_PATTERNS.match(t): return "frontmatter"
+    if _BACKMATTER_PATTERNS.match(t):  return "backmatter"
+    return default
+
+
 def _split_printed_range(s):
     """Convert a Crossref `page` string ('263-279', '263', 'S1-S4') to
     the v2 schema's [[start, end]] string-pair form. Returns None if
@@ -67,7 +91,8 @@ def main():
         el = max(sl, int(e_pi)) if e_pi is not None else sl
         legacy_entries.append({
             "id": f"e{i+1}",
-            "type": e.get("type") or "article",
+            "type": _classify_entry_type(e.get("title"),
+                                         default=e.get("type") or "article"),
             "title": e.get("title") or "",
             "authors": e.get("authors") or None,
             "page_index_ranges": [[f"n{sl}", f"n{el}"]],
