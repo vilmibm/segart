@@ -90,12 +90,10 @@ companion = {
     "schema_version": 1,
     "ia_item": item,
     "toc_schema_version": toc.get("schema_version"),
-    "toc_generated_at": toc.get("generated_at"),
     "issue_doi": None,
     "special_issue_title": None,
     "issue_editors": [],
     "provenance": {
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "software_versions": software_versions(),
         "sources": {
             "crossref": {"via": "live_api_cached", "fetched_at": "2026-05-11"},

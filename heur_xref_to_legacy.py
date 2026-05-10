@@ -103,7 +103,6 @@ def main():
         "issue": d.get("issue"),
         "year": d.get("year"),
         "page_index_count": page_index_count,
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "software_versions": software_versions(),
         "entries": legacy_entries,
     }, indent=2))
