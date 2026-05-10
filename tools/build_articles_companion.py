@@ -12,6 +12,9 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from segart_version import software_versions
+
 if len(sys.argv) != 3:
     print("usage: build_articles_companion.py <toc.json> <out_articles.json.gz>")
     sys.exit(1)
@@ -94,6 +97,7 @@ companion = {
     "provenance": {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "generator": {"name": "segart-articles-builder", "version": "pilot"},
+        "software_versions": software_versions(),
         "sources": {
             "crossref": {"via": "live_api_cached", "fetched_at": "2026-05-11"},
             # Other sources not yet wired:

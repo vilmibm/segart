@@ -18,6 +18,8 @@ from pathlib import Path
 
 SEGART = Path("/Users/brewster/tmp/segart")
 sys.path.insert(0, str(SEGART))
+sys.path.insert(0, str(SEGART / "tools"))
+from segart_version import software_versions  # noqa: E402
 
 
 def _split_printed_range(s):
@@ -107,6 +109,7 @@ def main():
             "version": "heur_xref_v2_repair",
             "method": "crossref+page_numbers+repair_running_headers",
         },
+        "software_versions": software_versions(),
         "entries": legacy_entries,
     }, indent=2))
     print(f"wrote {out_path}: {len(legacy_entries)} entries")
