@@ -154,13 +154,14 @@ def fetch_crossref_year(issn, year, mailto):
             old_items = d.get("items", [])
             old_error = d.get("error")
             paginated = d.get("paginated")
-            # Trust cache if: complete (paginated=True with items) or
-            # legacy small cache (len < 200).
-            if paginated and old_items:
+            # Refetch when:
+            #   - cached error exists (transient failure, try again)
+            #   - exactly 200 records with no paginated marker (legacy
+            #     pre-cursor truncation)
+            # Otherwise trust the cache.
+            should_refetch = bool(old_error) or (len(old_items) == 200 and not paginated)
+            if not should_refetch:
                 return old_items, old_error
-            if len(old_items) < 200 and not paginated:
-                return old_items, old_error
-            # Otherwise: refetch (truncated, or previously wiped on 429)
         except Exception:
             old_items, old_error = None, None  # corrupted; refetch
 
