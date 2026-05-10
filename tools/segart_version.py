@@ -7,7 +7,6 @@ includes interpreter, key dependencies, and external tool versions when
 known.
 """
 import json
-import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -72,7 +71,6 @@ def software_versions(extra: dict = None) -> dict:
         "segart_git_sha":     _safe(_git_sha),
         "segart_git_dirty":   _safe(_git_dirty),
         "python":             sys.version.split()[0],
-        "platform":           platform.platform(),
         "ia_cli":             _safe(_ia_cli_version),
         "deps": {
             "anthropic":      _safe(lambda: _pkg_version("anthropic")),
