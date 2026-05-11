@@ -29,6 +29,7 @@ from segart_version import software_versions
 CACHE_ROOT = Path("/Users/brewster/tmp/segart/tmp")
 FULL_CACHE = CACHE_ROOT / "crossref_full_cache"
 FATCAT_CACHE = CACHE_ROOT / "fatcat_doi_cache"
+FATCAT_FILES_CACHE = CACHE_ROOT / "fatcat_files_cache"
 OPENALEX_CACHE = CACHE_ROOT / "openalex_doi_cache"
 UNPAYWALL_CACHE = CACHE_ROOT / "unpaywall_doi_cache"
 PUBMED_CACHE = CACHE_ROOT / "pubmed_doi_cache"
@@ -141,10 +142,19 @@ def _doi_cache_get(cache_dir: Path, doi: str, url: str,
 
 
 def fetch_fatcat_by_doi(doi: str) -> dict | None:
-    """Look up a fatcat release by DOI with file expansion."""
-    url = ("https://api.fatcat.wiki/v0/release/lookup"
-           f"?doi={urllib.parse.quote(doi)}&expand=files")
-    return _doi_cache_get(FATCAT_CACHE, doi, url)
+    """Look up a fatcat release by DOI (via scholar.archive.org's fatcat
+    v2 API — the v0 host api.fatcat.wiki was retired). Files are not
+    embedded; follow up with /release/{id}/files."""
+    url = ("https://scholar.archive.org/api/fatcat/v2/release/lookup"
+           f"?id_type=doi&id_value={urllib.parse.quote(doi)}")
+    rec = _doi_cache_get(FATCAT_CACHE, doi, url)
+    if not rec or not rec.get("id"):
+        return rec
+    rid = rec["id"]
+    files_url = (f"https://scholar.archive.org/api/fatcat/v2/release/{rid}/files")
+    files_resp = _doi_cache_get(FATCAT_FILES_CACHE, rid, files_url)
+    rec["_files"] = (files_resp or {}).get("items") or []
+    return rec
 
 
 def fetch_openalex_by_doi(doi: str) -> dict | None:
@@ -172,22 +182,23 @@ def fetch_pubmed_by_doi(doi: str) -> dict | None:
 
 
 def project_fatcat(rec: dict | None) -> dict | None:
-    """Slim projection per articles_format.md."""
-    if not rec: return None
+    """Slim projection per articles_format.md. Accepts the fatcat v2
+    release record with `_files` attached by fetch_fatcat_by_doi."""
+    if not rec or not rec.get("id"): return None
     files_out = []
-    for f in rec.get("files") or []:
+    for f in rec.get("_files") or []:
         urls = [{"url": u.get("url"), "rel": u.get("rel")}
                 for u in (f.get("urls") or [])]
         files_out.append({
-            "ident":    f.get("ident"),
+            "ident":    f.get("id"),
             "sha1":     f.get("sha1"),
             "md5":      f.get("md5"),
-            "size":     f.get("size"),
+            "size":     f.get("size_bytes") or f.get("size"),
             "mimetype": f.get("mimetype"),
             "urls":     urls,
         })
     return {
-        "release_ident":   rec.get("ident"),
+        "release_ident":   rec.get("id"),
         "work_ident":      rec.get("work_id"),
         "container_ident": rec.get("container_id"),
         "release_stage":   rec.get("release_stage"),
