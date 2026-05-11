@@ -324,6 +324,22 @@ def main():
     print(f"item: {args.item}", file=sys.stderr)
     print(f"  issn={issn} {vol}/{iss}/{yr}", file=sys.stderr)
 
+    # PageIndex converts scandata leafNum (the raw Scribe image counter
+    # in scandata.xml) to BookReader page-index nN (0-indexed,
+    # visible-only). Docling renders the PDF page-by-page, and its
+    # page_no is 1-indexed against the PDF (which is built from visible
+    # leaves). So docling_page_no - 1 is the equivalent BR page-index
+    # for items with no hidden leaves; for items with hidden leaves
+    # inside the body, scandata_to_br accounts for the offset.
+    from page_index import PageIndex as _PI
+    page_idx = _PI.for_item(args.item, fetch=True)
+
+    def docling_page_to_br(doc_page_no):
+        """docling page_no (1-indexed) → BookReader page-index nN."""
+        if doc_page_no is None: return None
+        br = page_idx.scandata_to_br(doc_page_no - 1)
+        return br if br is not None else max(0, doc_page_no - 1)
+
     # pn_health gate: when IA's pn.json is unreliable (restart pagination,
     # low confidence, sparse), trusting it produces wrong page-indices
     # silently. Bypass pn.json in those cases and rely on the docling
@@ -396,10 +412,12 @@ def main():
             or (ep and ep not in pn_map and ep in repair_map)
         )
 
-        # Title search in docling
-        sl_title, score = find_title_in_docling(
+        # Title search in docling. The result is a docling page_no
+        # (1-indexed visible-leaf counter); convert to BR page-index.
+        sl_title_doc, score = find_title_in_docling(
             a.get("title"), blocks, hint_leaf=sl_pn, toc_pages=toc_pages
         )
+        sl_title = docling_page_to_br(sl_title_doc)
 
         # Pick the best leaf
         if sl_pn is not None and el_pn is not None:

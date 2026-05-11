@@ -82,11 +82,22 @@ def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> d
     if first_article_pi is not None:
         end_pn = min(end_pn, first_article_pi - 1)
 
+    # Convert docling page_no → BR page-index
+    try:
+        from page_index import PageIndex
+        pi = PageIndex.for_item(item, fetch=True)
+        start_br = pi.scandata_to_br(contents_pn - 1)
+        end_br = pi.scandata_to_br(end_pn - 1)
+        if start_br is None: start_br = max(0, contents_pn - 1)
+        if end_br is None: end_br = max(start_br, end_pn - 1)
+    except Exception:
+        start_br = max(0, contents_pn - 1)
+        end_br = max(start_br, end_pn - 1)
     return {
         "type": "frontmatter",
         "title": "Table of Contents",
         "authors": None,
-        "page_index_ranges": [[f"n{contents_pn}", f"n{end_pn}"]],
+        "page_index_ranges": [[f"n{start_br}", f"n{end_br}"]],
         "printed_pages": None,
         "ext_ids": {},
         "confidence": 0.8,
@@ -99,9 +110,9 @@ def _docling_printed_to_pi(item: str) -> dict:
     """Walk docling page_header blocks looking for pure printed page
     numbers (e.g. "86", "87"). Returns {printed_page_str → page_index}.
 
-    Each printed-page string is mapped to the first docling page_no
-    whose page_header starts with that number. For items with
-    restart-pagination at the issue level, this gives a per-section
+    Each printed-page string is mapped to the BR page-index of the
+    first docling page whose page_header starts with that number. For
+    items with restart-pagination, this gives a per-section
     printed→page-index map that pn.json couldn't produce.
     """
     p = DOCLING_CACHE / item / f"{item}_docling.json.gz"
@@ -111,6 +122,11 @@ def _docling_printed_to_pi(item: str) -> dict:
             doc = json.load(fh)
     except Exception:
         return {}
+    try:
+        from page_index import PageIndex
+        pi = PageIndex.for_item(item, fetch=True)
+    except Exception:
+        pi = None
     out = {}
     for t in doc.get("texts") or []:
         if t.get("label") != "page_header": continue
@@ -122,7 +138,11 @@ def _docling_printed_to_pi(item: str) -> dict:
         m = re.match(r"^(\d{1,4})\b", txt)
         if not m: continue
         printed = m.group(1)
-        out.setdefault(printed, pn)
+        # Convert docling page_no (1-indexed) → BR page-index
+        br_pi = pi.scandata_to_br(pn - 1) if pi else None
+        if br_pi is None:
+            br_pi = max(0, pn - 1)  # fallback for missing PageIndex
+        out.setdefault(printed, br_pi)
     return out
 
 
