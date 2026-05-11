@@ -250,6 +250,20 @@ def regenerate_qa_report():
                        f"/page/{r['pi_start']}/mode/1up?admin=1")
         out.append("")
 
+    # All published items, including clean ones with no QA flags.
+    all_published = sorted(
+        Path(p).parent.name.replace("pilot_", "")
+        for p in glob.glob(str(PILOTS / "pilot_sim_*" / "sim_*_toc.json"))
+    )
+    out.append("## All published items")
+    out.append("")
+    out.append(f"{len(all_published)} items have segart `_toc.json` + "
+               f"`_articles.json.gz` + `_docling.json.gz` + review on IA.")
+    out.append("")
+    for item in all_published:
+        out.append(f"- [`{item}`](https://archive.org/details/{item}?admin=1)")
+    out.append("")
+
     report_path = SEGART / "QA_REPORT.md"
     report_path.write_text("\n".join(out))
     log(f"  QA_REPORT.md regenerated: {all_items} items, "
