@@ -95,6 +95,39 @@ def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> d
     }
 
 
+def _find_next_section_pi_after(item: str, after_pi: int,
+                                  ignore_titles: set | None = None) -> int | None:
+    """Scan docling for the first section_header / title block on a page
+    strictly after `after_pi`. Returns its page_no (BR page-index for
+    items where docling page_no aligns) or None if no docling cache or
+    no header found. Used to bound the last article's end span when
+    Crossref deposited only the start page."""
+    p = DOCLING_CACHE / item / f"{item}_docling.json.gz"
+    if not p.exists(): return None
+    try:
+        with gzip.open(p, "rt", encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception:
+        return None
+    titles_to_ignore = {(t or "").strip().lower() for t in (ignore_titles or set())}
+    best = None
+    for t in doc.get("texts") or []:
+        if t.get("label") not in ("title", "section_header"):
+            continue
+        pr = t.get("prov") or []
+        if not pr: continue
+        pn = pr[0].get("page_no")
+        if pn is None or pn <= after_pi: continue
+        txt = (t.get("text") or "").strip().lower()
+        # Skip a section_header that is just a repeat of the article's
+        # own title (running header on subsequent pages).
+        if txt and txt in titles_to_ignore:
+            continue
+        if best is None or pn < best:
+            best = pn
+    return best
+
+
 _FRONTMATTER_PATTERNS = re.compile(
     r"^(preface|foreword|introduction|editorial board|contents"
     r"|table of contents|editor'?s note|from the editor|editorial"
@@ -197,9 +230,18 @@ def main():
             "confidence": 0.7,
             "evidence": [e["_method"]] if e.get("_method") else [],
             "level": 1,
+            "_collapsed_span": (el == sl),  # internal flag for post-pass
         })
 
-    # Compute page_index_count from the item's scandata via page_index module.
+    # Span inference: many Crossref records deposit only the start page
+    # (e.g. AMR records `page: "777"` for an article that runs pp.777-782).
+    # heuristic_toc_crossref leaves end==start in that case. Walk the
+    # sorted entries: when an entry's span collapsed, infer end from the
+    # next entry's start. Conservative — leaves 1 leaf of slack for an
+    # inter-article divider page if there's room.
+    #
+    # Compute page_index_count up front so we have a fallback for the
+    # last collapsed entry (otherwise last article would be 1-page).
     page_index_count = None
     item = d.get("item")
     if item:
@@ -211,11 +253,81 @@ def main():
             print(f"  WARN: could not derive page_index_count: {e}",
                   file=sys.stderr)
 
+    def _start_pi(le):
+        return int(le["page_index_ranges"][0][0].lstrip("n"))
+    sorted_idxs = sorted(range(len(legacy_entries)), key=lambda j: _start_pi(legacy_entries[j]))
+    inferred_count = 0
+    for pos, j in enumerate(sorted_idxs):
+        le = legacy_entries[j]
+        if not le.get("_collapsed_span"): continue
+        sl = _start_pi(le)
+        # Co-located entries: when multiple collapsed entries share the
+        # same start_pi, they're typically short announcements on the
+        # same printed page (e.g., "Call for Papers", "Research
+        # Fellowship", "Seminars" all starting on p.92). Don't infer
+        # separate spans for them — leave each at start_pi..start_pi
+        # and mark needs_qa.
+        siblings = [j2 for j2 in sorted_idxs
+                     if j2 != j and _start_pi(legacy_entries[j2]) == sl]
+        if siblings:
+            le["needs_qa"] = True
+            le["confidence"] = 0.4
+            le["evidence"] = (le.get("evidence") or []) + ["span_co_located_with_siblings"]
+            inferred_count += 1
+            continue
+        # Find the next entry (in document order) whose start is strictly
+        # greater than this one's start.
+        next_start = None
+        for j2 in sorted_idxs[pos + 1:]:
+            s2 = _start_pi(legacy_entries[j2])
+            if s2 > sl:
+                next_start = s2; break
+        if next_start is None:
+            # Last collapsed entry — extend to end of visible pages. We
+            # tried using docling section_headers to find a tighter
+            # boundary, but those frequently match intra-article
+            # subsections ("Methods", "Discussion"), so over-truncate.
+            # Better to over-claim into trailing backmatter, mark
+            # needs_qa, and let a librarian fix it.
+            if page_index_count is not None and page_index_count - 1 > sl:
+                new_el = page_index_count - 1
+                le["page_index_ranges"] = [[f"n{sl}", f"n{new_el}"]]
+                le["evidence"] = (le.get("evidence") or []) + ["span_extended_to_end"]
+                le["confidence"] = 0.4  # widest fallback, lowest confidence
+                le["needs_qa"] = True
+                inferred_count += 1
+            continue
+        # End = next_start - 1, with 1 leaf of slack if the gap is >= 2
+        # (covers chapter-divider blanks).
+        gap = next_start - sl
+        if gap <= 1: continue  # adjacent; no room to expand
+        new_el = next_start - (2 if gap >= 3 else 1)
+        new_el = max(sl, new_el)
+        le["page_index_ranges"] = [[f"n{sl}", f"n{new_el}"]]
+        le["evidence"] = (le.get("evidence") or []) + ["span_inferred_from_next_entry"]
+        le["confidence"] = 0.5  # inferred span — lower than 0.7 default
+        inferred_count += 1
+    # Strip internal flag.
+    for le in legacy_entries:
+        le.pop("_collapsed_span", None)
+
+    # page_index_count was already computed above for span inference.
+
     out_path = Path(args.out) if args.out else (
         SEGART / "tmp" / "tocs_compare" /
         f"{d['item']}_toc_heurxref.json"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Surface QA-relevant counts at the issue level so consumers (and a
+    # downstream "items needing review" report) can find issues whose
+    # spans were inferred rather than deposited.
+    article_count = sum(1 for le in legacy_entries
+                        if le.get("type") == "article")
+    qa_summary = {
+        "entries_with_inferred_spans": inferred_count,
+        "entries_needing_qa": [le["id"] for le in legacy_entries
+                                if le.get("needs_qa")],
+    }
     out_path.write_text(json.dumps({
         "schema_version": 2,
         "item": d["item"],
@@ -225,6 +337,7 @@ def main():
         "year": d.get("year"),
         "page_index_count": page_index_count,
         "software_versions": software_versions(),
+        "qa": qa_summary,
         "entries": legacy_entries,
     }, indent=2))
     print(f"wrote {out_path}: {len(legacy_entries)} entries")
