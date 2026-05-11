@@ -114,13 +114,18 @@ def post_ia_review(item: str, body: str, *, title: str = DEFAULT_REVIEW_TITLE,
 def _ia_upload(item: str, local_path: Path, remote_name: str, *,
                dry_run: bool = False) -> None:
     """Upload a file to an IA item via the `ia` CLI. Idempotent
-    (replaces existing file with same name)."""
+    (replaces existing file with same name).
+
+    Always passes --no-derive: our files (_toc.json, _articles.json.gz,
+    _docling.json.gz) are metadata sidecars, not source content. They
+    don't need to retrigger book-derivation tasks (OCR, PDF, jp2).
+    """
     if dry_run:
-        print(f"[dry-run] would ia upload {local_path} -> "
+        print(f"[dry-run] would ia upload --no-derive {local_path} -> "
               f"{item}/{remote_name}", file=sys.stderr)
         return
-    # Use ia CLI; relies on user's existing creds.
-    cmd = ["ia", "upload", item, str(local_path), f"--remote-name={remote_name}"]
+    cmd = ["ia", "upload", item, str(local_path),
+           f"--remote-name={remote_name}", "--no-derive"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"ia upload failed for {remote_name}: {r.stderr.strip()}")
