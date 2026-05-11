@@ -261,7 +261,7 @@ def regenerate_qa_report():
                f"`_articles.json.gz` + `_docling.json.gz` + review on IA.")
     out.append("")
     for item in all_published:
-        out.append(f"- [`{item}`](https://archive.org/details/{item}?admin=1)")
+        out.append(f"- https://archive.org/details/{item}?admin=1")
     out.append("")
 
     report_path = SEGART / "QA_REPORT.md"

@@ -1,6 +1,6 @@
 # QA Review: heurxref Pilot Batch
 
-Generated 2026-05-11 06:44 — **49** items published, **15** entries flagged across **12** items.
+Generated 2026-05-11 06:45 — **49** items published, **15** entries flagged across **12** items.
 
 ## Flag breakdown
 
@@ -143,52 +143,52 @@ Item: https://archive.org/details/sim_psychology-in-the-schools_1986-04_23_2?adm
 
 49 items have segart `_toc.json` + `_articles.json.gz` + `_docling.json.gz` + review on IA.
 
-- [`sim_academy-of-management-review_2000-10_25_4`](https://archive.org/details/sim_academy-of-management-review_2000-10_25_4?admin=1)
-- [`sim_acta-radiologica_2005-10_46_6`](https://archive.org/details/sim_acta-radiologica_2005-10_46_6?admin=1)
-- [`sim_advanced-drug-delivery-reviews_1997-01-15_23_1-3`](https://archive.org/details/sim_advanced-drug-delivery-reviews_1997-01-15_23_1-3?admin=1)
-- [`sim_american-journal-of-sports-medicine_march-april-1989_17_2`](https://archive.org/details/sim_american-journal-of-sports-medicine_march-april-1989_17_2?admin=1)
-- [`sim_annual-review-of-psychology_2015_66`](https://archive.org/details/sim_annual-review-of-psychology_2015_66?admin=1)
-- [`sim_ans_1978-10_1_1`](https://archive.org/details/sim_ans_1978-10_1_1?admin=1)
-- [`sim_ans_1990-09_13_1`](https://archive.org/details/sim_ans_1990-09_13_1?admin=1)
-- [`sim_aphasiology_july-october-1991_5_4-5`](https://archive.org/details/sim_aphasiology_july-october-1991_5_4-5?admin=1)
-- [`sim_canadian-entomologist_1981-08_113_8`](https://archive.org/details/sim_canadian-entomologist_1981-08_113_8?admin=1)
-- [`sim_child-abuse-neglect_1995-05_19_5_0`](https://archive.org/details/sim_child-abuse-neglect_1995-05_19_5_0?admin=1)
-- [`sim_clinical-journal-of-sport-medicine_1999-07_9_3`](https://archive.org/details/sim_clinical-journal-of-sport-medicine_1999-07_9_3?admin=1)
-- [`sim_clinics-in-sports-medicine_1994-04_13_2`](https://archive.org/details/sim_clinics-in-sports-medicine_1994-04_13_2?admin=1)
-- [`sim_clinics-in-sports-medicine_2000-04_19_2`](https://archive.org/details/sim_clinics-in-sports-medicine_2000-04_19_2?admin=1)
-- [`sim_european-journal-of-personality_1987-09_1_3`](https://archive.org/details/sim_european-journal-of-personality_1987-09_1_3?admin=1)
-- [`sim_exceptionality_2007_15_3`](https://archive.org/details/sim_exceptionality_2007_15_3?admin=1)
-- [`sim_futures-uk_2009-05_41_4`](https://archive.org/details/sim_futures-uk_2009-05_41_4?admin=1)
-- [`sim_hand-clinics_1992-02_8_1`](https://archive.org/details/sim_hand-clinics_1992-02_8_1?admin=1)
-- [`sim_hand-clinics_2004-02_20_1`](https://archive.org/details/sim_hand-clinics_2004-02_20_1?admin=1)
-- [`sim_human-communication-research_2002-04_28_2`](https://archive.org/details/sim_human-communication-research_2002-04_28_2?admin=1)
-- [`sim_infectious-disease-clinics-of-north-america_2003-06_17_2`](https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2003-06_17_2?admin=1)
-- [`sim_infectious-disease-clinics-of-north-america_2004-03_18_1`](https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2004-03_18_1?admin=1)
-- [`sim_infectious-disease-clinics-of-north-america_2004-06_18_2`](https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2004-06_18_2?admin=1)
-- [`sim_infectious-disease-clinics-of-north-america_2014-03_28_1`](https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2014-03_28_1?admin=1)
-- [`sim_international-journal-of-group-psychotherapy_1996-01_46_1`](https://archive.org/details/sim_international-journal-of-group-psychotherapy_1996-01_46_1?admin=1)
-- [`sim_international-journal-of-intercultural-relations-ijir_1985_9`](https://archive.org/details/sim_international-journal-of-intercultural-relations-ijir_1985_9?admin=1)
-- [`sim_issues-in-mental-health-nursing_april-may-2003_24_3`](https://archive.org/details/sim_issues-in-mental-health-nursing_april-may-2003_24_3?admin=1)
-- [`sim_journal-american-academy-child-adolescent-psychiatry_2013-06_52_6`](https://archive.org/details/sim_journal-american-academy-child-adolescent-psychiatry_2013-06_52_6?admin=1)
-- [`sim_journal-of-adolescent-research_1992-04_7_2`](https://archive.org/details/sim_journal-of-adolescent-research_1992-04_7_2?admin=1)
-- [`sim_journal-of-chemical-ecology_1977-03_3_2`](https://archive.org/details/sim_journal-of-chemical-ecology_1977-03_3_2?admin=1)
-- [`sim_journal-of-clinical-pharmacology_2002-11_42_11`](https://archive.org/details/sim_journal-of-clinical-pharmacology_2002-11_42_11?admin=1)
-- [`sim_journal-of-communication_autumn-1993_43_4`](https://archive.org/details/sim_journal-of-communication_autumn-1993_43_4?admin=1)
-- [`sim_journal-of-gerontological-nursing_2012-12_38_12`](https://archive.org/details/sim_journal-of-gerontological-nursing_2012-12_38_12?admin=1)
-- [`sim_journal-of-interpersonal-violence_2001-07_16_7`](https://archive.org/details/sim_journal-of-interpersonal-violence_2001-07_16_7?admin=1)
-- [`sim_journal-of-obstetric-gynecologic-neonatal-nursing-jognn_1995-09_24_7`](https://archive.org/details/sim_journal-of-obstetric-gynecologic-neonatal-nursing-jognn_1995-09_24_7?admin=1)
-- [`sim_journal-of-social-and-clinical-psychology_1986_4_3`](https://archive.org/details/sim_journal-of-social-and-clinical-psychology_1986_4_3?admin=1)
-- [`sim_journal-of-social-issues_summer-1975_31_3`](https://archive.org/details/sim_journal-of-social-issues_summer-1975_31_3?admin=1)
-- [`sim_journal-of-zoology_1991-12_225_4`](https://archive.org/details/sim_journal-of-zoology_1991-12_225_4?admin=1)
-- [`sim_marine-biology_1991-02_108_1`](https://archive.org/details/sim_marine-biology_1991-02_108_1?admin=1)
-- [`sim_nursing-clinics-of-north-america_1992-03_27_1`](https://archive.org/details/sim_nursing-clinics-of-north-america_1992-03_27_1?admin=1)
-- [`sim_nursing-research_may-june-1991_40_3`](https://archive.org/details/sim_nursing-research_may-june-1991_40_3?admin=1)
-- [`sim_personality-and-individual-differences_2002-04-05_32_5_0`](https://archive.org/details/sim_personality-and-individual-differences_2002-04-05_32_5_0?admin=1)
-- [`sim_physician-and-sportsmedicine_1983-03_11_3`](https://archive.org/details/sim_physician-and-sportsmedicine_1983-03_11_3?admin=1)
-- [`sim_psychiatric-clinics-of-north-america_1989-06_12_2`](https://archive.org/details/sim_psychiatric-clinics-of-north-america_1989-06_12_2?admin=1)
-- [`sim_psychiatric-clinics-of-north-america_1989-09_12_3`](https://archive.org/details/sim_psychiatric-clinics-of-north-america_1989-09_12_3?admin=1)
-- [`sim_psychiatric-clinics-of-north-america_2006-03_29_1`](https://archive.org/details/sim_psychiatric-clinics-of-north-america_2006-03_29_1?admin=1)
-- [`sim_psychiatric-clinics-of-north-america_2013-03_36_1`](https://archive.org/details/sim_psychiatric-clinics-of-north-america_2013-03_36_1?admin=1)
-- [`sim_psychiatry_1956-08_19_3_0`](https://archive.org/details/sim_psychiatry_1956-08_19_3_0?admin=1)
-- [`sim_psychology-in-the-schools_1986-04_23_2`](https://archive.org/details/sim_psychology-in-the-schools_1986-04_23_2?admin=1)
-- [`sim_rural-special-education-quarterly_fall-2012_31_3`](https://archive.org/details/sim_rural-special-education-quarterly_fall-2012_31_3?admin=1)
+- https://archive.org/details/sim_academy-of-management-review_2000-10_25_4?admin=1
+- https://archive.org/details/sim_acta-radiologica_2005-10_46_6?admin=1
+- https://archive.org/details/sim_advanced-drug-delivery-reviews_1997-01-15_23_1-3?admin=1
+- https://archive.org/details/sim_american-journal-of-sports-medicine_march-april-1989_17_2?admin=1
+- https://archive.org/details/sim_annual-review-of-psychology_2015_66?admin=1
+- https://archive.org/details/sim_ans_1978-10_1_1?admin=1
+- https://archive.org/details/sim_ans_1990-09_13_1?admin=1
+- https://archive.org/details/sim_aphasiology_july-october-1991_5_4-5?admin=1
+- https://archive.org/details/sim_canadian-entomologist_1981-08_113_8?admin=1
+- https://archive.org/details/sim_child-abuse-neglect_1995-05_19_5_0?admin=1
+- https://archive.org/details/sim_clinical-journal-of-sport-medicine_1999-07_9_3?admin=1
+- https://archive.org/details/sim_clinics-in-sports-medicine_1994-04_13_2?admin=1
+- https://archive.org/details/sim_clinics-in-sports-medicine_2000-04_19_2?admin=1
+- https://archive.org/details/sim_european-journal-of-personality_1987-09_1_3?admin=1
+- https://archive.org/details/sim_exceptionality_2007_15_3?admin=1
+- https://archive.org/details/sim_futures-uk_2009-05_41_4?admin=1
+- https://archive.org/details/sim_hand-clinics_1992-02_8_1?admin=1
+- https://archive.org/details/sim_hand-clinics_2004-02_20_1?admin=1
+- https://archive.org/details/sim_human-communication-research_2002-04_28_2?admin=1
+- https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2003-06_17_2?admin=1
+- https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2004-03_18_1?admin=1
+- https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2004-06_18_2?admin=1
+- https://archive.org/details/sim_infectious-disease-clinics-of-north-america_2014-03_28_1?admin=1
+- https://archive.org/details/sim_international-journal-of-group-psychotherapy_1996-01_46_1?admin=1
+- https://archive.org/details/sim_international-journal-of-intercultural-relations-ijir_1985_9?admin=1
+- https://archive.org/details/sim_issues-in-mental-health-nursing_april-may-2003_24_3?admin=1
+- https://archive.org/details/sim_journal-american-academy-child-adolescent-psychiatry_2013-06_52_6?admin=1
+- https://archive.org/details/sim_journal-of-adolescent-research_1992-04_7_2?admin=1
+- https://archive.org/details/sim_journal-of-chemical-ecology_1977-03_3_2?admin=1
+- https://archive.org/details/sim_journal-of-clinical-pharmacology_2002-11_42_11?admin=1
+- https://archive.org/details/sim_journal-of-communication_autumn-1993_43_4?admin=1
+- https://archive.org/details/sim_journal-of-gerontological-nursing_2012-12_38_12?admin=1
+- https://archive.org/details/sim_journal-of-interpersonal-violence_2001-07_16_7?admin=1
+- https://archive.org/details/sim_journal-of-obstetric-gynecologic-neonatal-nursing-jognn_1995-09_24_7?admin=1
+- https://archive.org/details/sim_journal-of-social-and-clinical-psychology_1986_4_3?admin=1
+- https://archive.org/details/sim_journal-of-social-issues_summer-1975_31_3?admin=1
+- https://archive.org/details/sim_journal-of-zoology_1991-12_225_4?admin=1
+- https://archive.org/details/sim_marine-biology_1991-02_108_1?admin=1
+- https://archive.org/details/sim_nursing-clinics-of-north-america_1992-03_27_1?admin=1
+- https://archive.org/details/sim_nursing-research_may-june-1991_40_3?admin=1
+- https://archive.org/details/sim_personality-and-individual-differences_2002-04-05_32_5_0?admin=1
+- https://archive.org/details/sim_physician-and-sportsmedicine_1983-03_11_3?admin=1
+- https://archive.org/details/sim_psychiatric-clinics-of-north-america_1989-06_12_2?admin=1
+- https://archive.org/details/sim_psychiatric-clinics-of-north-america_1989-09_12_3?admin=1
+- https://archive.org/details/sim_psychiatric-clinics-of-north-america_2006-03_29_1?admin=1
+- https://archive.org/details/sim_psychiatric-clinics-of-north-america_2013-03_36_1?admin=1
+- https://archive.org/details/sim_psychiatry_1956-08_19_3_0?admin=1
+- https://archive.org/details/sim_psychology-in-the-schools_1986-04_23_2?admin=1
+- https://archive.org/details/sim_rural-special-education-quarterly_fall-2012_31_3?admin=1
