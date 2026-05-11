@@ -240,14 +240,21 @@ def project_pubmed(rec: dict | None) -> dict | None:
     if not rec: return None
     if not rec.get("pmid"):
         return None  # not in PubMed
+    # Europe PMC sometimes returns descriptorName/qualifierName as a plain
+    # string, sometimes as a dict {value, ui, majorTopic_YN}. Handle both.
+    def _v(x):
+        if isinstance(x, dict): return x.get("value")
+        return x
+    def _ui(x):
+        return x.get("ui") if isinstance(x, dict) else None
     mesh = []
     for h in (rec.get("meshHeadingList") or {}).get("meshHeading") or []:
-        d = h.get("descriptorName") or {}
-        quals = [(q.get("qualifierName") or {}).get("value") or q.get("qualifierName")
+        d = h.get("descriptorName")
+        quals = [_v(q.get("qualifierName"))
                  for q in (h.get("meshQualifierList") or {}).get("meshQualifier") or []]
         mesh.append({
-            "id":    d.get("ui") or h.get("descriptorName_UI"),
-            "term":  d.get("value") if isinstance(d, dict) else h.get("descriptorName"),
+            "id":    _ui(d) or h.get("descriptorName_UI"),
+            "term":  _v(d),
             "major": h.get("majorTopic_YN") == "Y",
             "qualifiers": [q for q in quals if q],
         })
