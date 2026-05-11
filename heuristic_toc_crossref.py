@@ -232,22 +232,54 @@ def title_tokens(s):
     return set(w for w in s.split() if w not in STOPWORDS and len(w) > 2)
 
 
-def find_title_in_docling(title, blocks, hint_leaf=None):
+_TOC_HEADING_TOKENS = {"contents", "table"}
+
+
+def _toc_page_set(blocks):
+    """Pages whose section_headers/titles indicate this IS the printed
+    Table of Contents (matches "Contents" or "Table of Contents")."""
+    toc_pages = set()
+    for page_no, label, text in blocks:
+        if label not in ("section_header", "title", "paragraph_header"):
+            continue
+        t = re.sub(r"[^a-z]+", " ", (text or "").lower()).strip()
+        if t in ("contents", "table of contents"):
+            toc_pages.add(page_no)
+    return toc_pages
+
+
+def find_title_in_docling(title, blocks, hint_leaf=None, toc_pages=None):
     """Search docling blocks for a leaf where the title text appears.
     Score by token overlap; prefer high-scoring AND label != 'text' AND
     earliest position. If hint_leaf is provided, prefer matches near it.
+
+    Two false-match guards:
+    - Skip pages flagged as the printed ToC (toc_pages) — those are
+      listings of article titles, not the articles themselves.
+    - For non-header (`text`) matches, require precision >= 0.5 too:
+      the matched block must be similar in length to the title, not
+      a long paragraph that happens to contain the title's words
+      (e.g., "Editorial correspondence, letters to the editor and..."
+      shouldn't match a "Letters to the editor" article title).
+
     Returns (leaf, score) or (None, 0)."""
     target = title_tokens(title)
     if not target: return None, 0
+    toc_pages = toc_pages or set()
+    is_header = lambda l: l in ("section_header", "title", "paragraph_header")
     best = (None, 0)
     for page_no, label, text in blocks:
+        if page_no in toc_pages: continue
         toks = title_tokens(text)
         if not toks: continue
-        overlap = len(target & toks) / max(1, len(target))
+        overlap = len(target & toks) / max(1, len(target))   # recall
+        precision = len(target & toks) / max(1, len(toks))   # precision
         if overlap < 0.5: continue
-        # Header labels score higher than 'text'
-        score = overlap * (1.5 if label in ("section_header", "title", "paragraph_header") else 1.0)
-        # Penalize distance from hint_leaf if provided
+        # Body text needs both decent recall AND precision; a long
+        # paragraph that just mentions the title's words isn't a match.
+        if not is_header(label) and precision < 0.5:
+            continue
+        score = overlap * (1.5 if is_header(label) else 1.0) * (0.5 + 0.5 * precision)
         if hint_leaf is not None:
             score -= 0.001 * abs(page_no - hint_leaf)
         if score > best[1]:
@@ -292,17 +324,40 @@ def main():
     print(f"item: {args.item}", file=sys.stderr)
     print(f"  issn={issn} {vol}/{iss}/{yr}", file=sys.stderr)
 
-    pn_map = load_page_numbers(args.item)
-    if pn_map is None:
-        sys.exit(f"missing page_numbers.json for {args.item}")
-    print(f"  page_numbers entries: {len(pn_map)}", file=sys.stderr)
+    # pn_health gate: when IA's pn.json is unreliable (restart pagination,
+    # low confidence, sparse), trusting it produces wrong page-indices
+    # silently. Bypass pn.json in those cases and rely on the docling
+    # title-match fallback for each entry's location.
+    sys.path.insert(0, str(SEGART / "tools"))
+    from pn_health import assess_pn_health
+    pn_raw = json.loads((ITEMS / args.item / f"{args.item}_page_numbers.json").read_text())
+    pn_health = assess_pn_health(pn_raw, item=args.item)
+    print(f"  pn_health: {pn_health['status']} "
+          f"(cov={pn_health['coverage']} conf={pn_health['confidence_fraction']} "
+          f"mono={pn_health['monotonicity']} restart={pn_health['restart_pagination']})",
+          file=sys.stderr)
 
-    # Repair fallback: docling running-header anchors fill pages IA missed.
-    repair_map = load_repaired_page_numbers(args.item)
-    n_added = sum(1 for p in repair_map if p not in pn_map)
-    print(f"  repair fallback: {len(repair_map)} pages, {n_added} new", file=sys.stderr)
-    # IA wins where it has a value; repair fills holes only.
-    pn_map_merged = {**repair_map, **pn_map}
+    if pn_health["status"] == "ok":
+        pn_map = load_page_numbers(args.item)
+        if pn_map is None:
+            sys.exit(f"missing page_numbers.json for {args.item}")
+        print(f"  page_numbers entries: {len(pn_map)}", file=sys.stderr)
+        repair_map = load_repaired_page_numbers(args.item)
+        n_added = sum(1 for p in repair_map if p not in pn_map)
+        print(f"  repair fallback: {len(repair_map)} pages, {n_added} new",
+              file=sys.stderr)
+        pn_map_merged = {**repair_map, **pn_map}
+    else:
+        # pn.json untrustworthy → use docling-derived running-header map
+        # if available, else empty. Article location then routes through
+        # the docling title-match fallback per entry.
+        pn_map = {}  # mark as empty so downstream code's `not in pn_map`
+                     # checks fall through to repair_map / title-match
+        repair_map = load_repaired_page_numbers(args.item)
+        print(f"  bypassing pn.json (health={pn_health['status']}); "
+              f"using repair_map only ({len(repair_map)} pages)",
+              file=sys.stderr)
+        pn_map_merged = dict(repair_map)
 
     # We want articles with `page` field — refetch unconditionally for now
     # (existing cache stored only doi+title).
@@ -320,8 +375,9 @@ def main():
 
     # Load docling blocks for the title-search fallback path.
     blocks = load_docling_blocks(args.item)
-    print(f"  docling blocks (header+text≥20): {len(blocks)}",
-          file=sys.stderr)
+    toc_pages = _toc_page_set(blocks)
+    print(f"  docling blocks (header+text≥20): {len(blocks)} "
+          f"(ToC pages: {sorted(toc_pages)})", file=sys.stderr)
 
     # Translate to TOC. Strategy per article:
     #   1. Try page_numbers.json translation (deterministic, when it works).
@@ -342,7 +398,7 @@ def main():
 
         # Title search in docling
         sl_title, score = find_title_in_docling(
-            a.get("title"), blocks, hint_leaf=sl_pn
+            a.get("title"), blocks, hint_leaf=sl_pn, toc_pages=toc_pages
         )
 
         # Pick the best leaf

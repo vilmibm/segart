@@ -24,6 +24,10 @@ SEGART = Path("/Users/brewster/tmp/segart")
 TOCS = SEGART / "tmp" / "tocs"
 PILOTS = SEGART / "tmp" / "audit"
 LOG = SEGART / "tmp" / "audit" / "publish_batch.log"
+SKIPLIST = SEGART / "tmp" / "audit" / "publish_batch_skipped.jsonl"
+
+sys.path.insert(0, str(SEGART / "tools"))
+from pn_health import assess_pn_health, load_pn_for_item  # noqa: E402
 
 
 def log(msg):
@@ -89,7 +93,20 @@ def step_publish(item):
     return True, "ok"
 
 
+def step_pn_health(item):
+    """Inform-only: log pn.json health for the run record. heurxref now
+    handles bad pn.json internally (bypasses pn.json when health != ok
+    and uses docling title-match instead), so we don't skip here."""
+    pn = load_pn_for_item(item)
+    if not pn:
+        return "no_pn_json"
+    a = assess_pn_health(pn, item=item)
+    return a["status"]
+
+
 def process(item):
+    health = step_pn_health(item)
+    log(f"  step 0 pn_health: {health}")
     log(f"  step 1/4 heurxref")
     ok, msg = step_heurxref(item)
     if not ok: return False, f"heurxref FAIL: {msg}"
