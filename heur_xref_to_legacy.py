@@ -95,6 +95,37 @@ def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> d
     }
 
 
+def _docling_printed_to_pi(item: str) -> dict:
+    """Walk docling page_header blocks looking for pure printed page
+    numbers (e.g. "86", "87"). Returns {printed_page_str → page_index}.
+
+    Each printed-page string is mapped to the first docling page_no
+    whose page_header starts with that number. For items with
+    restart-pagination at the issue level, this gives a per-section
+    printed→page-index map that pn.json couldn't produce.
+    """
+    p = DOCLING_CACHE / item / f"{item}_docling.json.gz"
+    if not p.exists(): return {}
+    try:
+        with gzip.open(p, "rt", encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception:
+        return {}
+    out = {}
+    for t in doc.get("texts") or []:
+        if t.get("label") != "page_header": continue
+        pr = t.get("prov") or []
+        if not pr: continue
+        pn = pr[0].get("page_no")
+        if pn is None: continue
+        txt = (t.get("text") or "").strip()
+        m = re.match(r"^(\d{1,4})\b", txt)
+        if not m: continue
+        printed = m.group(1)
+        out.setdefault(printed, pn)
+    return out
+
+
 def _find_next_section_pi_after(item: str, after_pi: int,
                                   ignore_titles: set | None = None) -> int | None:
     """Scan docling for the first section_header / title block on a page
@@ -255,25 +286,96 @@ def main():
 
     def _start_pi(le):
         return int(le["page_index_ranges"][0][0].lstrip("n"))
-    sorted_idxs = sorted(range(len(legacy_entries)), key=lambda j: _start_pi(legacy_entries[j]))
+    def _end_pi(le):
+        return int(le["page_index_ranges"][0][1].lstrip("n"))
+
+    # Cache docling printed→page-index map once (used for repeated-title
+    # section-internal placement and for fall-through cases).
+    docling_pp_map = _docling_printed_to_pi(d.get("item") or "")
+
+    def _printed_start(le):
+        """First printed page from legacy entry's printed_pages, as str."""
+        pp = le.get("printed_pages")
+        if not pp or not pp[0]: return None
+        return str(pp[0][0]) if pp[0][0] is not None else None
+
+    # Pass A: repeated-title relocation. When multiple entries share the
+    # same start_pi AND the same title (typical for sections like
+    # "Letters to the editor" or "ANS Open Forum" that Crossref deposits
+    # as separate DOIs each with distinct printed page ranges), use
+    # docling page_headers to relocate each entry to its actual page.
+    if docling_pp_map:
+        starts_to_idxs = {}
+        for k, le in enumerate(legacy_entries):
+            starts_to_idxs.setdefault(_start_pi(le), []).append(k)
+        for sl, ks in starts_to_idxs.items():
+            if len(ks) < 2: continue
+            titles = {(legacy_entries[k].get("title") or "").strip().lower()
+                       for k in ks}
+            if len(titles) != 1: continue  # different titles → not the repeated case
+            for k in ks:
+                le = legacy_entries[k]
+                pstart = _printed_start(le)
+                if not pstart or pstart not in docling_pp_map: continue
+                new_sl = docling_pp_map[pstart]
+                if new_sl == sl: continue
+                # Span length comes from Crossref printed range.
+                old_end = _end_pi(le); span = max(0, old_end - sl)
+                new_el = new_sl + span
+                le["page_index_ranges"] = [[f"n{new_sl}", f"n{new_el}"]]
+                le["evidence"] = (le.get("evidence") or []) + [
+                    "start_from_docling_page_header"
+                ]
+                le["confidence"] = 0.6
+
+    # Re-sort after Pass A — relocations may have changed order.
+    sorted_idxs = sorted(range(len(legacy_entries)),
+                          key=lambda j: _start_pi(legacy_entries[j]))
     inferred_count = 0
+
     for pos, j in enumerate(sorted_idxs):
         le = legacy_entries[j]
         if not le.get("_collapsed_span"): continue
         sl = _start_pi(le)
         # Co-located entries: when multiple collapsed entries share the
-        # same start_pi, they're typically short announcements on the
-        # same printed page (e.g., "Call for Papers", "Research
-        # Fellowship", "Seminars" all starting on p.92). Don't infer
-        # separate spans for them — leave each at start_pi..start_pi
-        # and mark needs_qa.
+        # same start_pi, they're typically (a) short announcements on
+        # the same printed page (Call for Papers + Seminars +
+        # Fellowship), or (b) a repeated-title section like "ANS Open
+        # Forum" where Crossref deposited multiple DOIs that share the
+        # section title but have distinct sequential page ranges. For
+        # case (b), docling page_headers carry the printed page number
+        # per leaf; use that to relocate each entry.
         siblings = [j2 for j2 in sorted_idxs
                      if j2 != j and _start_pi(legacy_entries[j2]) == sl]
         if siblings:
-            le["needs_qa"] = True
-            le["confidence"] = 0.4
-            le["evidence"] = (le.get("evidence") or []) + ["span_co_located_with_siblings"]
-            inferred_count += 1
+            same_title_siblings = [
+                j2 for j2 in siblings
+                if (legacy_entries[j2].get("title") or "").strip().lower()
+                    == (le.get("title") or "").strip().lower()
+            ]
+            relocated = False
+            if same_title_siblings and docling_pp_map:
+                # Repeated-title section: look up this entry's Crossref
+                # printed start in the docling page_header map.
+                pstart = _printed_start(le)
+                if pstart and pstart in docling_pp_map:
+                    new_sl = docling_pp_map[pstart]
+                    if new_sl != sl:
+                        le["page_index_ranges"] = [[f"n{new_sl}",
+                                                     f"n{new_sl}"]]
+                        le["evidence"] = (le.get("evidence") or []) + [
+                            "start_from_docling_page_header"
+                        ]
+                        le["confidence"] = 0.6
+                        relocated = True
+                        inferred_count += 1
+            if not relocated:
+                le["needs_qa"] = True
+                le["confidence"] = 0.4
+                le["evidence"] = (le.get("evidence") or []) + [
+                    "span_co_located_with_siblings"
+                ]
+                inferred_count += 1
             continue
         # Find the next entry (in document order) whose start is strictly
         # greater than this one's start.
