@@ -161,6 +161,100 @@ def main():
     log(f"batch done: ok={n_ok} fail={n_fail} "
         f"in {(time.time()-t_start)/60:.1f}m")
 
+    if not args.dry_run:
+        regenerate_qa_report()
+
+
+def regenerate_qa_report():
+    """Rebuild QA_REPORT.md from every published item's per-issue
+    `qa.entries_needing_qa` block. Runs at end of every live batch so
+    the repo's QA report stays in sync."""
+    import glob
+    from datetime import datetime
+
+    rows = []
+    all_items = 0
+    for fn in sorted(glob.glob(str(PILOTS / "pilot_sim_*" / "sim_*_toc.json"))):
+        item = Path(fn).parent.name.replace("pilot_", "")
+        try: d = json.load(open(fn))
+        except Exception: continue
+        all_items += 1
+        qa_ids = (d.get("qa") or {}).get("entries_needing_qa") or []
+        if not qa_ids: continue
+        for e in d["entries"]:
+            if e["id"] not in qa_ids: continue
+            pi = e["page_index_ranges"][0]
+            ev = e.get("evidence") or []
+            if "span_co_located_with_siblings" in ev:
+                reason = "co-located"
+                details = ("Multiple Crossref entries share this start page-"
+                           "index. Each kept at 1 page; verify whether "
+                           "boundaries should differ.")
+            elif "span_extended_to_end" in ev:
+                reason = "extended-to-end"
+                details = ("Last entry whose Crossref deposit was a single "
+                           "start page; span extended to end of visible "
+                           "pages (may over-claim trailing backmatter).")
+            else:
+                reason = "other"; details = "; ".join(ev)
+            rows.append({"item": item, "id": e["id"],
+                          "title": e.get("title") or "",
+                          "pi_start": pi[0], "pi_end": pi[1],
+                          "printed": e.get("printed_pages"),
+                          "reason": reason, "details": details,
+                          "confidence": e.get("confidence")})
+
+    n_items = len({r["item"] for r in rows})
+    n_co = sum(1 for r in rows if r["reason"] == "co-located")
+    n_ee = sum(1 for r in rows if r["reason"] == "extended-to-end")
+
+    out = [
+        "# QA Review: heurxref Pilot Batch",
+        "",
+        f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} — "
+        f"**{all_items}** items published, **{len(rows)}** entries flagged "
+        f"across **{n_items}** items.",
+        "",
+        "## Flag breakdown",
+        "",
+        f"- **co-located**: {n_co} — multiple Crossref entries share a "
+        f"start page-index AND title (typically end-of-issue announcements, "
+        f"repeated-title book reviews, or front-matter pairs).",
+        f"- **extended-to-end**: {n_ee} — last entry whose Crossref deposit "
+        f"was a single start page; span extended to end of visible pages.",
+        "",
+        "## How to QA each entry",
+        "",
+        "1. Click the BookReader link to view the flagged page.",
+        "2. Confirm the article's actual extent on the page.",
+        "3. If a flag is a false positive (entry is correctly placed), no action needed.",
+        "4. If our range is wrong, edit `tmp/audit/pilot_<item>/<item>_toc.json` and re-publish.",
+        "",
+        "## Entries",
+        "",
+    ]
+    by_item = {}
+    for r in rows: by_item.setdefault(r["item"], []).append(r)
+    for item in sorted(by_item):
+        out.append(f"### `{item}`")
+        out.append(f"Item: https://archive.org/details/{item}?admin=1")
+        out.append("")
+        for r in by_item[item]:
+            out.append(f"- **{r['id']}** — _{r['title']}_  ")
+            out.append(f"  - position: `{r['pi_start']}` to `{r['pi_end']}` "
+                       f"(printed pp. {r['printed']})  ")
+            out.append(f"  - flag: **{r['reason']}** "
+                       f"(confidence {r['confidence']})  ")
+            out.append(f"  - {r['details']}  ")
+            out.append(f"  - view: https://archive.org/details/{item}"
+                       f"/page/{r['pi_start']}/mode/1up?admin=1")
+        out.append("")
+
+    report_path = SEGART / "QA_REPORT.md"
+    report_path.write_text("\n".join(out))
+    log(f"  QA_REPORT.md regenerated: {all_items} items, "
+        f"{len(rows)} flagged across {n_items} items")
+
 
 if __name__ == "__main__":
     main()
