@@ -237,7 +237,7 @@ def regenerate_qa_report():
     for r in rows: by_item.setdefault(r["item"], []).append(r)
     for item in sorted(by_item):
         out.append(f"### `{item}`")
-        out.append(f"Item: https://archive.org/details/{item}?admin=1")
+        out.append(f"Item: https://www-drini.archive.org/details/{item}?admin=1")
         out.append("")
         for r in by_item[item]:
             out.append(f"- **{r['id']}** — _{r['title']}_  ")
@@ -246,7 +246,7 @@ def regenerate_qa_report():
             out.append(f"  - flag: **{r['reason']}** "
                        f"(confidence {r['confidence']})  ")
             out.append(f"  - {r['details']}  ")
-            out.append(f"  - view: https://archive.org/details/{item}"
+            out.append(f"  - view: https://www-drini.archive.org/details/{item}"
                        f"/page/{r['pi_start']}/mode/1up?admin=1")
         out.append("")
 
@@ -261,7 +261,7 @@ def regenerate_qa_report():
                f"`_articles.json.gz` + `_docling.json.gz` + review on IA.")
     out.append("")
     for item in all_published:
-        out.append(f"- https://archive.org/details/{item}?admin=1")
+        out.append(f"- https://www-drini.archive.org/details/{item}?admin=1")
     out.append("")
 
     report_path = SEGART / "QA_REPORT.md"
