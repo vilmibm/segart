@@ -26,6 +26,18 @@ DOCLING_CACHE = SEGART / "tmp" / "items"
 
 _TOC_HEADING_RE = re.compile(r"^(table of contents|contents)\s*$", re.IGNORECASE)
 
+# Section labels that frequently appear AS SUB-HEADINGS within a multi-page
+# printed Table of Contents (the journal's ToC lists articles grouped by
+# section). These shouldn't be treated as the terminator that ends the ToC
+# range — the ToC continues past them.
+_TOC_SUBHEADING_RE = re.compile(
+    r"^(articles|book\s*reviews?|publication\s*decisions|dialogue|"
+    r"related\s*articles|editorial|notes?|letters?|news|reviews?|"
+    r"announcements?|in\s*this\s*issue|forthcoming(\s*issues)?|"
+    r"recent\s*issues|features?|departments?|columns?)\s*$",
+    re.IGNORECASE,
+)
+
 
 def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> dict | None:
     """For the clean-tier QA workflow: pull a single 'Table of Contents'
@@ -70,11 +82,14 @@ def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> d
     if contents_pn is None:
         return None
 
-    # End-page: leaf just before the next section_header after contents,
-    # or just before the first article (whichever comes first).
+    # End-page: the next section_header after CONTENTS that is NOT a
+    # ToC sub-section label (ARTICLES, Book Reviews, etc.) — those
+    # appear as sub-headings within the ToC layout and shouldn't end
+    # the ToC range. Also bounded by the first article's start.
     next_header_pn = None
     for pn, txt in headers:
         if pn <= contents_pn: continue
+        if _TOC_SUBHEADING_RE.match(txt or ""): continue
         next_header_pn = pn; break
     end_pn = contents_pn
     if next_header_pn is not None:
@@ -313,6 +328,43 @@ def main():
     # section-internal placement and for fall-through cases).
     docling_pp_map = _docling_printed_to_pi(d.get("item") or "")
 
+    # Build the inverse map (page-index → printed page string) so we
+    # can update an entry's printed_pages metadata when we infer its
+    # page-index end via the next entry. Prefer pn.json (most complete);
+    # fall back to inverting docling_pp_map.
+    pi_to_printed = {}
+    item = d.get("item")
+    if item:
+        try:
+            pn_path = SEGART / "tmp" / "items" / item / f"{item}_page_numbers.json"
+            if pn_path.exists():
+                pn_data = json.loads(pn_path.read_text())
+                from page_index import PageIndex
+                pi_obj = PageIndex.for_item(item, fetch=True)
+                pi_to_printed = pi_obj.br_to_printed(pn_data)
+        except Exception:
+            pi_to_printed = {}
+    # Augment with docling-derived map (covers items where pn.json failed)
+    for printed, pn_pi in (docling_pp_map or {}).items():
+        pi_to_printed.setdefault(pn_pi, printed)
+
+    def _set_printed_end(le, new_el_pi):
+        """Update an entry's printed_pages end to match the inferred
+        page-index end. No-op if we can't determine the printed value."""
+        pp = le.get("printed_pages")
+        if not pp or not pp[0]: return
+        printed = pi_to_printed.get(new_el_pi)
+        if not printed: return
+        # Only widen, don't narrow: only update when the current end
+        # is the same as the start (collapsed) and the new printed is
+        # numerically/lexically >= current start.
+        try:
+            cur_start = str(pp[0][0])
+            if printed and printed != pp[0][1]:
+                le["printed_pages"] = [[cur_start, printed]]
+        except Exception:
+            pass
+
     def _printed_start(le):
         """First printed page from legacy entry's printed_pages, as str."""
         pp = le.get("printed_pages")
@@ -405,29 +457,27 @@ def main():
             if s2 > sl:
                 next_start = s2; break
         if next_start is None:
-            # Last collapsed entry — extend to end of visible pages. We
-            # tried using docling section_headers to find a tighter
-            # boundary, but those frequently match intra-article
-            # subsections ("Methods", "Discussion"), so over-truncate.
-            # Better to over-claim into trailing backmatter, mark
-            # needs_qa, and let a librarian fix it.
+            # Last collapsed entry — extend to end of visible pages.
+            # Over-claims into trailing backmatter; flag needs_qa.
             if page_index_count is not None and page_index_count - 1 > sl:
                 new_el = page_index_count - 1
                 le["page_index_ranges"] = [[f"n{sl}", f"n{new_el}"]]
                 le["evidence"] = (le.get("evidence") or []) + ["span_extended_to_end"]
-                le["confidence"] = 0.4  # widest fallback, lowest confidence
+                le["confidence"] = 0.4
                 le["needs_qa"] = True
+                _set_printed_end(le, new_el)
                 inferred_count += 1
             continue
         # End = next_start - 1, with 1 leaf of slack if the gap is >= 2
         # (covers chapter-divider blanks).
         gap = next_start - sl
-        if gap <= 1: continue  # adjacent; no room to expand
+        if gap <= 1: continue
         new_el = next_start - (2 if gap >= 3 else 1)
         new_el = max(sl, new_el)
         le["page_index_ranges"] = [[f"n{sl}", f"n{new_el}"]]
         le["evidence"] = (le.get("evidence") or []) + ["span_inferred_from_next_entry"]
-        le["confidence"] = 0.5  # inferred span — lower than 0.7 default
+        le["confidence"] = 0.5
+        _set_printed_end(le, new_el)
         inferred_count += 1
     # Strip internal flag.
     for le in legacy_entries:
