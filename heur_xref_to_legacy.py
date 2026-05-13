@@ -682,17 +682,22 @@ def main():
         le["confidence"] = 0.5
         _set_printed_end(le, new_el)
         inferred_count += 1
-    # Global trailing-blank trim: for every entry whose claimed end page
-    # is docling-blank, back off until the page has body content. QA
-    # found many Crossref-deposited spans over-claim into a trailing
-    # blank verso page (e.g., "Fundamental Patterns" claims pp.13-24
-    # but printed-page 24 is blank). Bounded by the entry's start so we
-    # never invert the span.
+    # Trailing-blank trim: only for entries whose end was INFERRED (not
+    # Crossref-deposited). A first-round librarian QA showed the global
+    # trim shifted ~80 ranges the librarian had marked correct because
+    # the article's last page rendered as low-OCR in docling. Crossref's
+    # deposited ranges are a stronger signal than our docling blank
+    # heuristic, so trim only the cases we generated ourselves.
+    INFERRED_EV = {
+        "span_inferred_from_next_entry",
+        "span_inferred_from_next_entry_shared_page",
+        "span_extended_to_end",
+    }
     if docling_pages:
         for le in legacy_entries:
-            # e0_toc range comes from the docling ToC walk which intentionally
-            # extends through blank versos between ToC pages — don't trim those back.
             if le.get("id") == "e0_toc": continue
+            ev = set(le.get("evidence") or [])
+            if not (ev & INFERRED_EV): continue
             sl_e, el_e = _start_pi(le), _end_pi(le)
             new_el = el_e
             while new_el > sl_e:

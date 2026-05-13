@@ -1,10 +1,10 @@
 # QA Review: heurxref Pilot Batch
 
-Generated 2026-05-13 07:59 — **149** items published, **56** entries flagged across **44** items.
+Generated 2026-05-13 08:28 — **149** items published, **57** entries flagged across **45** items.
 
 ## Flag breakdown
 
-- **co-located**: 25 — multiple Crossref entries share a start page-index AND title (typically end-of-issue announcements, repeated-title book reviews, or front-matter pairs).
+- **co-located**: 26 — multiple Crossref entries share a start page-index AND title (typically end-of-issue announcements, repeated-title book reviews, or front-matter pairs).
 - **extended-to-end**: 31 — last entry whose Crossref deposit was a single start page; span extended to end of visible pages.
 
 ## How to QA each entry
@@ -158,6 +158,15 @@ Item: https://www-drini.archive.org/details/sim_american-journal-of-sports-medic
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_american-journal-of-sports-medicine_march-april-1989_17_2/page/n183/mode/1up?admin=1
+
+### `sim_ans_1978-10_1_1`
+Item: https://www-drini.archive.org/details/sim_ans_1978-10_1_1?admin=1
+
+- **e13** — _ANS Open Forum_  
+  - position: `n98` to `n98` (printed pp. [['93', '93']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_ans_1978-10_1_1/page/n98/mode/1up?admin=1
 
 ### `sim_ans_1990-09_13_1`
 Item: https://www-drini.archive.org/details/sim_ans_1990-09_13_1?admin=1
@@ -377,6 +386,15 @@ Item: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_11
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_113_8/page/n113/mode/1up?admin=1
 
+### `sim_clinical-biomechanics_2010-01_25_1`
+Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-01_25_1?admin=1
+
+- **e17** — _Annual General Meeting: 9th-11th June 2010_  
+  - position: `n106` to `n108` (printed pp. [['95', '95']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-01_25_1/page/n106/mode/1up?admin=1
+
 ### `sim_clinical-biomechanics_2010-06_25_5`
 Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-06_25_5?admin=1
 
@@ -421,15 +439,6 @@ Item: https://www-drini.archive.org/details/sim_journal-of-chemical-ecology_1977
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_journal-of-chemical-ecology_1977-03_3_2/page/n126/mode/1up?admin=1
-
-### `sim_journal-of-clinical-pharmacology_2002-11_42_11`
-Item: https://www-drini.archive.org/details/sim_journal-of-clinical-pharmacology_2002-11_42_11?admin=1
-
-- **e14** — _Marijuana Smoking and Head and Neck Cancer_  
-  - position: `n210` to `n219` (printed pp. None)  
-  - flag: **extended-to-end** (confidence 0.4)  
-  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
-  - view: https://www-drini.archive.org/details/sim_journal-of-clinical-pharmacology_2002-11_42_11/page/n210/mode/1up?admin=1
 
 ### `sim_journal-of-communication_autumn-1993_43_4`
 Item: https://www-drini.archive.org/details/sim_journal-of-communication_autumn-1993_43_4?admin=1

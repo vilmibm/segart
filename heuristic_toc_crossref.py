@@ -176,19 +176,52 @@ def fetch_crossref_full(issn, year, vol, iss):
 
 
 def derive_metadata(item):
-    """Walk ILL CSVs for first usable (issn, year, vol, iss) for this item.
+    """Return (issn, year, volume, issue) for an IA periodical item.
 
-    Falls back to IA item metadata (`ia metadata <item>`) when ILL doesn't
-    have the row, OR when ILL is missing the issue number — some journals
-    publish annual volumes without per-issue subdivisions (Biological
-    Conservation, Annual Reviews, etc.), and Crossref deposits leave
-    `issue` empty for those. In that case the (issn, year, vol) tuple is
-    sufficient; `iss=""` gets matched against Crossref's empty issue
-    label by `_label_matches`.
+    IA metadata is the gold standard: it's the cataloger's record and
+    matches what's on the physical issue. ILL data is patron-typed and
+    has typos / wrong years / format quirks ("May/Jun" instead of "3").
+    So we always prefer IA's values. ILL is only used when IA is
+    missing a field, and then as a per-field fill-in — never to
+    override a present IA value.
+
+    An empty `issue` is valid for annual-volume journals (Biological
+    Conservation, Annual Reviews) — Crossref also deposits these with
+    empty issue, so the match path tolerates it.
     """
     import csv, glob
     from parse_cover_text import parse as parse_cover
     ISSN_RE = re.compile(r"^\d{4}-?\d{3}[\dXx]$")
+
+    # IA metadata first.
+    ia_issn = ia_vol = ia_iss = ia_yr = ""
+    try:
+        url = f"https://archive.org/metadata/{item}/metadata"
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=15) as fh:
+            md = json.load(fh).get("result") or {}
+        ia_issn = (md.get("issn") or "").strip()
+        if isinstance(ia_issn, list): ia_issn = ia_issn[0] if ia_issn else ""
+        ia_vol = (md.get("volume") or "").strip()
+        ia_iss = (md.get("issue") or "").strip()
+        date = (md.get("date") or md.get("year") or "").strip()
+        # IA date can be "YYYY", "YYYY-MM", "YYYY-MM-DD", or free-form
+        # ("May/June 1991"); pull the four-digit year out of the string.
+        m_yr = re.search(r"\b(19|20)\d{2}\b", date)
+        ia_yr = m_yr.group(0) if m_yr else (date[:4] if date[:4].isdigit() else "")
+    except Exception:
+        pass
+
+    # If IA gave us everything except issue and ILL has an issue, that
+    # may help — but only when ILL's issue looks like a number/letter
+    # (skip "May/Jun"-style ILL strings that won't match Crossref).
+    need_iss_from_ill = bool(ia_issn and ia_vol and ia_yr) and not ia_iss
+
+    # Walk ILL only if IA didn't provide a complete (issn, vol, yr).
+    have_complete_ia = bool(ia_issn and ISSN_RE.match(ia_issn) and ia_vol and ia_yr)
+    if have_complete_ia and not need_iss_from_ill:
+        return ia_issn, ia_yr, ia_vol, ia_iss
+
     for path in sorted(glob.glob(str(SEGART / "tmp/ill_logs/*.csv"))):
         with open(path, newline='') as fh:
             for row in csv.DictReader(fh):
@@ -207,26 +240,20 @@ def derive_metadata(item):
                     vol = vol or (cv.get("volume") or "").strip()
                     iss = iss or (cv.get("issue") or "").strip()
                     yr = yr or (cv.get("year") or "").strip()
+                if need_iss_from_ill:
+                    if iss and re.match(r"^[A-Za-z]?\d+(-\d+)?$", iss):
+                        return ia_issn, ia_yr, ia_vol, iss
+                    continue
                 if issn and ISSN_RE.match(issn) and vol and yr:
-                    return issn, yr[:4], vol, iss
+                    # IA missing — use ILL fields, preferring IA for any
+                    # field IA did supply.
+                    return (ia_issn or issn,
+                            ia_yr or yr[:4],
+                            ia_vol or vol,
+                            ia_iss or iss)
 
-    # ILL didn't have a usable row; fall back to IA item metadata.
-    try:
-        url = f"https://archive.org/metadata/{item}/metadata"
-        req = urllib.request.Request(url, headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=15) as fh:
-            md = json.load(fh).get("result") or {}
-    except Exception:
-        return None
-    issn = (md.get("issn") or "").strip()
-    if isinstance(issn, list): issn = issn[0] if issn else ""
-    vol = (md.get("volume") or "").strip()
-    iss = (md.get("issue") or "").strip()
-    # IA date can be "YYYY", "YYYY-MM", or "YYYY-MM-DD"
-    date = (md.get("date") or md.get("year") or "").strip()
-    yr = date[:4] if date else ""
-    if issn and ISSN_RE.match(issn) and vol and yr:
-        return issn, yr, vol, iss
+    if have_complete_ia:
+        return ia_issn, ia_yr, ia_vol, ia_iss
     return None
 
 
