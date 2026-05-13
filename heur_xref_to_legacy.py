@@ -39,7 +39,8 @@ _TOC_SUBHEADING_RE = re.compile(
 )
 
 
-def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> dict | None:
+def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None,
+                                     first_entry_pi: int | None = None) -> dict | None:
     """For the clean-tier QA workflow: pull a single 'Table of Contents'
     frontmatter entry from docling, when available.
 
@@ -82,20 +83,60 @@ def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> d
     if contents_pn is None:
         return None
 
-    # End-page: the next section_header after CONTENTS that is NOT a
-    # ToC sub-section label (ARTICLES, Book Reviews, etc.) — those
-    # appear as sub-headings within the ToC layout and shouldn't end
-    # the ToC range. Also bounded by the first article's start.
-    next_header_pn = None
-    for pn, txt in headers:
-        if pn <= contents_pn: continue
-        if _TOC_SUBHEADING_RE.match(txt or ""): continue
-        next_header_pn = pn; break
+    # End-page: extend the ToC range while subsequent docling pages
+    # still look like a ToC listing — many section_headers + minimal
+    # body text. Stop when a page looks like body content (paragraphs
+    # under a single header) or when we hit the first article's page.
+    pages_blocks = _load_docling_pages_blocks(item)
+
+    def _is_toc_layout_page(pn):
+        """Page looks like a ToC listing or a blank verso between ToC pages.
+        ≥2 section_header/title blocks signals multiple listed entries
+        (article body pages typically have 0-1). Blank verso pages count
+        as continuation so we don't stop on the verso between two
+        consecutive ToC pages."""
+        blocks = pages_blocks.get(pn, [])
+        if _page_is_blank(blocks):
+            return True
+        headers_n = sum(1 for b in blocks if b[0] in ("title", "section_header", "paragraph_header"))
+        return headers_n >= 2
+
+    # Walk forward from the CONTENTS page; keep extending while the next
+    # page is still ToC-layout. Bounded by first_article_pi (in docling
+    # coordinates that's first_article_pi + 1 since BR page-index =
+    # docling page_no - 1 for items with no hidden leaves at start;
+    # for items with hidden leaves, the docling page_no may be offset.
+    # Either way, the bound is "first article's docling page - 1".
     end_pn = contents_pn
-    if next_header_pn is not None:
-        end_pn = max(contents_pn, next_header_pn - 1)
-    if first_article_pi is not None:
-        end_pn = min(end_pn, first_article_pi - 1)
+    # The CONTENTS heading page itself is part of ToC.
+    # Try to find the next non-ToC page or the first article page.
+    walk_max = contents_pn + 20  # safety cap: ToCs aren't 20+ pages
+    pn = contents_pn + 1
+    while pn <= walk_max:
+        # If we're at or past the first article, stop before it.
+        # (first_article_pi is in BR page-index; convert by adding 1 in
+        # the simple case, but use _docling_printed map below if available)
+        if _is_toc_layout_page(pn):
+            end_pn = pn
+            pn += 1
+            continue
+        # Page is not ToC-layout — stop here.
+        break
+    # Hard cap: don't overlap with any classified entry. Use the
+    # earliest entry's start (first_entry_pi) when known — that's tighter
+    # than first_article_pi and prevents the ToC range overlapping a
+    # frontmatter entry like "Preface". Fall back to first_article_pi.
+    bound_pi = first_entry_pi if first_entry_pi is not None else first_article_pi
+    if bound_pi is not None:
+        bound_doc = bound_pi + 1
+        try:
+            from page_index import PageIndex as _PI
+            _pi = _PI.for_item(item, fetch=True)
+            leaf = _pi.br_to_scandata(bound_pi)
+            if leaf is not None: bound_doc = leaf + 1
+        except Exception:
+            pass
+        end_pn = min(end_pn, bound_doc - 1)
 
     # Convert docling page_no → BR page-index
     try:
@@ -119,6 +160,112 @@ def _detect_toc_entry_from_docling(item: str, first_article_pi: int | None) -> d
         "evidence": ["docling_section_header"],
         "level": 1,
     }
+
+
+def _load_docling_pages_blocks(item: str) -> dict:
+    """Return {docling_page_no: [(label, text, bbox_top_y, bbox_bottom_y)]}
+    for body content blocks. Excludes `page_header` (running header / page
+    number) blocks. Used by span-inference and ToC continuation to reason
+    about per-page layout."""
+    p = DOCLING_CACHE / item / f"{item}_docling.json.gz"
+    if not p.exists(): return {}
+    try:
+        with gzip.open(p, "rt", encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception:
+        return {}
+    out = {}
+    for t in doc.get("texts") or []:
+        label = t.get("label")
+        if label not in ("title", "section_header", "text", "paragraph_header"):
+            continue
+        pr = t.get("prov") or []
+        if not pr: continue
+        pn = pr[0].get("page_no")
+        bbox = pr[0].get("bbox") or {}
+        if pn is None: continue
+        txt = (t.get("text") or "").strip()
+        if not txt: continue
+        # bbox coord_origin is BOTTOMLEFT (per docling default); y_top > y_bot.
+        y_top = bbox.get("t")
+        y_bot = bbox.get("b")
+        if y_top is None or y_bot is None: continue
+        out.setdefault(pn, []).append((label, txt, float(y_top), float(y_bot)))
+    return out
+
+
+def _has_content_above_title(page_blocks: list, title_text: str,
+                              y_pad: float = 5.0) -> bool:
+    """Return True if there's any body paragraph above a matching title
+    block on this page. "Above" means a block whose bottom y-coordinate
+    is GREATER than the title's top y (BOTTOMLEFT coords, so higher y =
+    higher on page).
+
+    Title-match is by token-overlap against any text/title/section_header
+    block on the page — book-review titles often render as `text` rather
+    than `section_header`, so we can't restrict to header labels when
+    matching.
+
+    Only `text` (paragraph) blocks count as "content above". Other
+    section_headers above the title are typically super-headings of
+    article N+1 (e.g., "EDITORIAL TEAM ESSAY") rather than body content
+    from article N, so they don't indicate a shared page.
+
+    Used to detect 'shared page' layouts where article N's references
+    sit above article N+1's title on the same printed page.
+    """
+    target_toks = set(re.findall(r"[a-z0-9]+", (title_text or "").lower()))
+    if not target_toks or not page_blocks:
+        return False
+    # Find best title-match block — search across text/section_header/title.
+    # For `text`-label candidates, restrict to short blocks (book review
+    # titles are 1-3 lines, <200 chars); long body paragraphs accidentally
+    # match short target token sets by sharing common words.
+    best = None
+    best_score = 0
+    for blk in page_blocks:
+        label, text, _t, _b = blk
+        if label not in ("title", "section_header", "text"): continue
+        if label == "text" and len(text) > 200: continue
+        toks = set(re.findall(r"[a-z0-9]+", text.lower()))
+        if not toks: continue
+        score = len(target_toks & toks) / max(1, len(target_toks))
+        if score > best_score and score >= 0.4:
+            best = blk; best_score = score
+    if best is None:
+        return False
+    _, _, title_top, _ = best
+    for blk in page_blocks:
+        if blk is best: continue
+        label, text, _b_top, b_bot = blk
+        # Only body paragraphs count as content from article N. Other
+        # section_headers above the title are super-headings of N+1.
+        if label != "text": continue
+        # Skip OCR-noise blocks (single characters, pure punctuation —
+        # often column rules or scan artifacts misrecognized as text).
+        if len(re.findall(r"[A-Za-z0-9]", text)) < 5: continue
+        if b_bot > title_top + y_pad:
+            return True
+    return False
+
+
+def _page_is_blank(page_blocks: list) -> bool:
+    """True if a page has effectively no body content.
+
+    Truly-blank scanned pages still pick up OCR noise (single chars,
+    column rules, fragments like 'od', '|'). So count total alphanumeric
+    characters across body blocks; a real content page has hundreds, a
+    blank page typically <50.
+    """
+    if not page_blocks:
+        return True
+    # Only count text from blocks with at least 5 alnum chars — single-
+    # char "blocks" are usually OCR noise (column rules, fragments) that
+    # accumulate on truly-blank pages. Real content has multi-char blocks.
+    total = sum(len(re.findall(r"[A-Za-z0-9]", text))
+                for _label, text, _t, _b in page_blocks
+                if len(re.findall(r"[A-Za-z0-9]", text)) >= 5)
+    return total < 50
 
 
 def _docling_printed_to_pi(item: str) -> dict:
@@ -196,13 +343,19 @@ def _find_next_section_pi_after(item: str, after_pi: int,
 
 _FRONTMATTER_PATTERNS = re.compile(
     r"^(preface|foreword|introduction|editorial board|contents"
-    r"|table of contents|editor'?s note|from the editor|editorial"
-    r"|publication information|masthead|in this issue)\b",
+    r"|table of contents|editor'?s note(?:s)?|from the editor|editorial"
+    r"|publication information|masthead|in this issue"
+    r"|forthcoming(?:\s+issues)?|recent\s+issues"
+    r"|list of (?:guest\s+)?reviewers|acknowledgment\s+of\s+reviewers"
+    r"|notices?|open\s+forum|announcement(?:s)?|call\s+for\s+papers"
+    r"|seminars(?:[,;]?\s*conferences)?|research\s+fellowship)\b",
     re.IGNORECASE,
 )
 _BACKMATTER_PATTERNS = re.compile(
-    r"^(index|subject index|author index|bibliography"
-    r"|references|errata|colophon|advertisements?|back matter)\b",
+    r"^(index|subject\s+index|author\s+index|bibliography"
+    r"|references|errata|colophon|advertisements?|back\s+matter"
+    r"|publications?\s+received|volume\s+\d+\b"
+    r"|in\s+memoriam|memorials?)\b",
     re.IGNORECASE,
 )
 
@@ -260,15 +413,19 @@ def main():
     # reclassify as frontmatter) would shadow a real ToC heading that
     # appears later in the front matter.
     first_article_pi = None
+    first_entry_pi = None
     for e in raw_entries:
         pi_v = e.get("start_page_index", e.get("start_leaf"))
         if pi_v is None: continue
+        if first_entry_pi is None or int(pi_v) < first_entry_pi:
+            first_entry_pi = int(pi_v)
         klass = _classify_entry_type(e.get("title"),
                                      default=e.get("type") or "article")
-        if klass == "article":
-            first_article_pi = int(pi_v); break
+        if klass == "article" and first_article_pi is None:
+            first_article_pi = int(pi_v)
     toc_entry = _detect_toc_entry_from_docling(d.get("item") or "",
-                                                first_article_pi)
+                                                first_article_pi,
+                                                first_entry_pi)
     if toc_entry:
         toc_entry["id"] = "e0_toc"
         legacy_entries.append(toc_entry)
@@ -327,6 +484,24 @@ def main():
     # Cache docling printed→page-index map once (used for repeated-title
     # section-internal placement and for fall-through cases).
     docling_pp_map = _docling_printed_to_pi(d.get("item") or "")
+    # Cache docling per-page block layout (for case-A/case-B detection
+    # in span inference and trailing-blank trim).
+    docling_pages = _load_docling_pages_blocks(d.get("item") or "")
+    # Convert BR page-index → docling page_no (= scandata leaf + 1)
+    _pi_obj = None
+    try:
+        from page_index import PageIndex
+        if d.get("item"):
+            _pi_obj = PageIndex.for_item(d["item"], fetch=True)
+    except Exception:
+        _pi_obj = None
+
+    def _pi_to_doc_page(pi_n):
+        """BR page-index → docling page_no. Falls back to pi_n+1 if no PageIndex."""
+        if _pi_obj is not None:
+            leaf = _pi_obj.br_to_scandata(pi_n)
+            if leaf is not None: return leaf + 1
+        return pi_n + 1
 
     # Build the inverse map (page-index → printed page string) so we
     # can update an entry's printed_pages metadata when we infer its
@@ -468,17 +643,69 @@ def main():
                 _set_printed_end(le, new_el)
                 inferred_count += 1
             continue
-        # End = next_start - 1, with 1 leaf of slack if the gap is >= 2
-        # (covers chapter-divider blanks).
+        # Layout-aware end inference. Two cases per QA librarian review:
+        # - Case A (clean butt): article N ends on page X, article N+1's
+        #   title is at the TOP of page X+1. Correct end = next_start - 1.
+        # - Case B (shared page): article N's refs are at TOP of page X,
+        #   article N+1's title starts mid-page on X. Correct end = next_start.
+        # Distinguish via docling: check whether there's body content
+        # ABOVE the title block on the next_start page. After picking
+        # end, trim trailing blank pages.
         gap = next_start - sl
         if gap <= 1: continue
-        new_el = next_start - (2 if gap >= 3 else 1)
+        # Locate next article's title block on its docling page
+        next_title_text = None
+        # Find the legacy entry whose start IS next_start to get its title
+        for j2 in sorted_idxs:
+            if _start_pi(legacy_entries[j2]) == next_start:
+                next_title_text = legacy_entries[j2].get("title") or ""
+                break
+        shared_page = False
+        if next_title_text and docling_pages:
+            doc_pg = _pi_to_doc_page(next_start)
+            blocks = docling_pages.get(doc_pg, [])
+            shared_page = _has_content_above_title(blocks, next_title_text)
+        new_el = next_start if shared_page else next_start - 1
+        # Trailing-blank trim: docling-blank pages are usually verso
+        # blanks before a recto title. Back off while blank.
+        while new_el > sl and docling_pages:
+            doc_pg = _pi_to_doc_page(new_el)
+            if _page_is_blank(docling_pages.get(doc_pg, [])):
+                new_el -= 1
+            else:
+                break
         new_el = max(sl, new_el)
         le["page_index_ranges"] = [[f"n{sl}", f"n{new_el}"]]
-        le["evidence"] = (le.get("evidence") or []) + ["span_inferred_from_next_entry"]
+        ev_tag = "span_inferred_from_next_entry_shared_page" if shared_page \
+                 else "span_inferred_from_next_entry"
+        le["evidence"] = (le.get("evidence") or []) + [ev_tag]
         le["confidence"] = 0.5
         _set_printed_end(le, new_el)
         inferred_count += 1
+    # Global trailing-blank trim: for every entry whose claimed end page
+    # is docling-blank, back off until the page has body content. QA
+    # found many Crossref-deposited spans over-claim into a trailing
+    # blank verso page (e.g., "Fundamental Patterns" claims pp.13-24
+    # but printed-page 24 is blank). Bounded by the entry's start so we
+    # never invert the span.
+    if docling_pages:
+        for le in legacy_entries:
+            # e0_toc range comes from the docling ToC walk which intentionally
+            # extends through blank versos between ToC pages — don't trim those back.
+            if le.get("id") == "e0_toc": continue
+            sl_e, el_e = _start_pi(le), _end_pi(le)
+            new_el = el_e
+            while new_el > sl_e:
+                doc_pg = _pi_to_doc_page(new_el)
+                if _page_is_blank(docling_pages.get(doc_pg, [])):
+                    new_el -= 1
+                else:
+                    break
+            if new_el != el_e:
+                le["page_index_ranges"] = [[f"n{sl_e}", f"n{new_el}"]]
+                le["evidence"] = (le.get("evidence") or []) + ["trim_trailing_blank"]
+                _set_printed_end(le, new_el)
+
     # Strip internal flag.
     for le in legacy_entries:
         le.pop("_collapsed_span", None)
