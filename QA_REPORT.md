@@ -1,10 +1,10 @@
 # QA Review: heurxref Pilot Batch
 
-Generated 2026-05-12 18:26 — **149** items published, **57** entries flagged across **45** items.
+Generated 2026-05-13 07:59 — **149** items published, **56** entries flagged across **44** items.
 
 ## Flag breakdown
 
-- **co-located**: 26 — multiple Crossref entries share a start page-index AND title (typically end-of-issue announcements, repeated-title book reviews, or front-matter pairs).
+- **co-located**: 25 — multiple Crossref entries share a start page-index AND title (typically end-of-issue announcements, repeated-title book reviews, or front-matter pairs).
 - **extended-to-end**: 31 — last entry whose Crossref deposit was a single start page; span extended to end of visible pages.
 
 ## How to QA each entry
@@ -30,7 +30,7 @@ Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention
   - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
   - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-08_21_4_0/page/n106/mode/1up?admin=1
 - **e23** — _Forthcoming papers_  
-  - position: `n112` to `n125` (printed pp. [['I', 'I']])  
+  - position: `n112` to `n124` (printed pp. [['I', 'I']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-08_21_4_0/page/n112/mode/1up?admin=1
@@ -39,7 +39,7 @@ Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention
 Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-10_21_5_0?admin=1
 
 - **e10** — _Forthcoming papers_  
-  - position: `n98` to `n109` (printed pp. [['I', 'I']])  
+  - position: `n98` to `n108` (printed pp. [['I', 'I']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-10_21_5_0/page/n98/mode/1up?admin=1
@@ -113,7 +113,7 @@ Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention
 Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1999-09_31_5?admin=1
 
 - **e18** — _Cellular telephone use and fatal traffic collisions: a commentary_  
-  - position: `n186` to `n188` (printed pp. [['599', '599']])  
+  - position: `n186` to `n187` (printed pp. [['599', '599']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1999-09_31_5/page/n186/mode/1up?admin=1
@@ -122,7 +122,7 @@ Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention
 Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2000-05_32_3_0?admin=1
 
 - **e20** — _Erratum to “Injury surveillance in Victoria, Australia: developing comprehensive injury incidence estimates”[Accident Analysis and Prevention 32 (2), 277–286]_  
-  - position: `n146` to `n152` (printed pp. [['471', '471']])  
+  - position: `n146` to `n151` (printed pp. [['471', '471']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2000-05_32_3_0/page/n146/mode/1up?admin=1
@@ -154,19 +154,10 @@ Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention
 Item: https://www-drini.archive.org/details/sim_american-journal-of-sports-medicine_march-april-1989_17_2?admin=1
 
 - **e25** — _Society News_  
-  - position: `n183` to `n204` (printed pp. [['298', '319']])  
+  - position: `n183` to `n203` (printed pp. [['298', '318']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_american-journal-of-sports-medicine_march-april-1989_17_2/page/n183/mode/1up?admin=1
-
-### `sim_ans_1978-10_1_1`
-Item: https://www-drini.archive.org/details/sim_ans_1978-10_1_1?admin=1
-
-- **e13** — _ANS Open Forum_  
-  - position: `n98` to `n98` (printed pp. [['93', '93']])  
-  - flag: **co-located** (confidence 0.4)  
-  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
-  - view: https://www-drini.archive.org/details/sim_ans_1978-10_1_1/page/n98/mode/1up?admin=1
 
 ### `sim_ans_1990-09_13_1`
 Item: https://www-drini.archive.org/details/sim_ans_1990-09_13_1?admin=1
@@ -200,7 +191,7 @@ Item: https://www-drini.archive.org/details/sim_applied-acoustics_2008-06_69_6_0
 Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-07_71_7?admin=1
 
 - **e13** — _Corrigendum to “Measurement of resonance frequency and loss factor of a microphone diaphragm using a laser vibrometer” [Appl. Acoust. 71 (2010) 258–261]_  
-  - position: `n103` to `n104` (printed pp. [['681', '681']])  
+  - position: `n103` to `n103` (printed pp. [['681', '681']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_applied-acoustics_2010-07_71_7/page/n103/mode/1up?admin=1
@@ -209,7 +200,7 @@ Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-07_71_7?a
 Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-11_71_11?admin=1
 
 - **e18** — _Calendar_  
-  - position: `n128` to `n132` (printed pp. [['I', 'I']])  
+  - position: `n128` to `n131` (printed pp. [['I', 'I']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_applied-acoustics_2010-11_71_11/page/n128/mode/1up?admin=1
@@ -218,7 +209,7 @@ Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-11_71_11?
 Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-12_71_12?admin=1
 
 - **e13** — _Calendar_  
-  - position: `n108` to `n112` (printed pp. [['I', 'I']])  
+  - position: `n108` to `n111` (printed pp. [['I', 'I']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_applied-acoustics_2010-12_71_12/page/n108/mode/1up?admin=1
@@ -250,7 +241,7 @@ Item: https://www-drini.archive.org/details/sim_applied-geochemistry_1998-01_13_
 Item: https://www-drini.archive.org/details/sim_applied-geochemistry_2005-06_20_6?admin=1
 
 - **e15** — _Papers to Appear in Forthcoming Issues_  
-  - position: `n196` to `n202` (printed pp. [['I', 'I']])  
+  - position: `n196` to `n201` (printed pp. [['I', 'I']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_applied-geochemistry_2005-06_20_6/page/n196/mode/1up?admin=1
@@ -259,7 +250,7 @@ Item: https://www-drini.archive.org/details/sim_applied-geochemistry_2005-06_20_
 Item: https://www-drini.archive.org/details/sim_applied-geochemistry_2006-09_21_9?admin=1
 
 - **e11** — _Papers to Appear in Forthcoming Issues_  
-  - position: `n178` to `n184` (printed pp. [['I', 'I']])  
+  - position: `n178` to `n183` (printed pp. [['I', 'I']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_applied-geochemistry_2006-09_21_9/page/n178/mode/1up?admin=1
@@ -268,7 +259,7 @@ Item: https://www-drini.archive.org/details/sim_applied-geochemistry_2006-09_21_
 Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_1996_23_2_0?admin=1
 
 - **e15** — _Call for papers_  
-  - position: `n96` to `n102` (printed pp. [['193', '193']])  
+  - position: `n96` to `n101` (printed pp. [['193', '193']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_1996_23_2_0/page/n96/mode/1up?admin=1
@@ -277,7 +268,7 @@ Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_1996_23_2_
 Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2006_33_5?admin=1
 
 - **e13** — _Guide for Authors_  
-  - position: `n106` to `n108` (printed pp. [['472', '472']])  
+  - position: `n106` to `n107` (printed pp. [['472', '472']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2006_33_5/page/n106/mode/1up?admin=1
@@ -291,7 +282,7 @@ Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-02_37
   - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
   - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-02_37_1/page/n73/mode/1up?admin=1
 - **e16** — _Acknowledgement to Reviewers 2009_  
-  - position: `n90` to `n96` (printed pp. [['87', '87']])  
+  - position: `n90` to `n95` (printed pp. [['87', '87']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-02_37_1/page/n90/mode/1up?admin=1
@@ -327,7 +318,7 @@ Item: https://www-drini.archive.org/details/sim_biological-conservation_2004-11_
 Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-01_143_1?admin=1
 
 - **e25** — _Book review_  
-  - position: `n262` to `n274` (printed pp. [['265', '265']])  
+  - position: `n262` to `n273` (printed pp. [['265', '265']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-01_143_1/page/n262/mode/1up?admin=1
@@ -336,7 +327,7 @@ Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-01_
 Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-02_143_2?admin=1
 
 - **e18** — _Book review_  
-  - position: `n271` to `n272` (printed pp. [['532', '532']])  
+  - position: `n271` to `n271` (printed pp. [['532', '532']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-02_143_2/page/n271/mode/1up?admin=1
@@ -345,7 +336,7 @@ Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-02_
 Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-03_143_3?admin=1
 
 - **e18** — _Book review_  
-  - position: `n301` to `n306` (printed pp. [['824', '824']])  
+  - position: `n301` to `n305` (printed pp. [['824', '824']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-03_143_3/page/n301/mode/1up?admin=1
@@ -363,7 +354,7 @@ Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-04_
 Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-07_143_7?admin=1
 
 - **e15** — _Book review_  
-  - position: `n265` to `n268` (printed pp. [['1826', '1826']])  
+  - position: `n265` to `n267` (printed pp. [['1826', '1826']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-07_143_7/page/n265/mode/1up?admin=1
@@ -381,7 +372,7 @@ Item: https://www-drini.archive.org/details/sim_biological-conservation_biologic
 Item: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_113_8?admin=1
 
 - **e17** — _ERRATA_  
-  - position: `n113` to `n116` (printed pp. [['776', '779']])  
+  - position: `n113` to `n115` (printed pp. [['776', '778']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_113_8/page/n113/mode/1up?admin=1
@@ -390,7 +381,7 @@ Item: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_11
 Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-06_25_5?admin=1
 
 - **e20** — _Announcement_  
-  - position: `n121` to `n124` (printed pp. [['504', '504']])  
+  - position: `n121` to `n123` (printed pp. [['504', '504']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-06_25_5/page/n121/mode/1up?admin=1
@@ -399,7 +390,7 @@ Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-06_25
 Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-08_25_7?admin=1
 
 - **e21** — _Corrigendum to “Sagittal plane knee joint moments following anterior cruciate ligament injury and reconstruction; A Systematic Review” [Clinical Biomechanics 25 (2010) 277–283]_  
-  - position: `n135` to `n136` (printed pp. [['749', '749']])  
+  - position: `n135` to `n135` (printed pp. [['749', '749']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-08_25_7/page/n135/mode/1up?admin=1
@@ -408,7 +399,7 @@ Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-08_25
 Item: https://www-drini.archive.org/details/sim_clinical-journal-of-sport-medicine_1999-07_9_3?admin=1
 
 - **e20** — _Adverse Effects of Oral Creatine Supplementation_  
-  - position: `n83` to `n86` (printed pp. [['190', '193']])  
+  - position: `n83` to `n85` (printed pp. [['190', '192']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_clinical-journal-of-sport-medicine_1999-07_9_3/page/n83/mode/1up?admin=1
@@ -426,7 +417,7 @@ Item: https://www-drini.archive.org/details/sim_journal-american-academy-child-a
 Item: https://www-drini.archive.org/details/sim_journal-of-chemical-ecology_1977-03_3_2?admin=1
 
 - **e12** — _Announcement_  
-  - position: `n126` to `n132` (printed pp. [['239', '239']])  
+  - position: `n126` to `n130` (printed pp. [['239', '239']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_journal-of-chemical-ecology_1977-03_3_2/page/n126/mode/1up?admin=1
@@ -435,7 +426,7 @@ Item: https://www-drini.archive.org/details/sim_journal-of-chemical-ecology_1977
 Item: https://www-drini.archive.org/details/sim_journal-of-clinical-pharmacology_2002-11_42_11?admin=1
 
 - **e14** — _Marijuana Smoking and Head and Neck Cancer_  
-  - position: `n210` to `n220` (printed pp. None)  
+  - position: `n210` to `n219` (printed pp. None)  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_journal-of-clinical-pharmacology_2002-11_42_11/page/n210/mode/1up?admin=1
@@ -444,7 +435,7 @@ Item: https://www-drini.archive.org/details/sim_journal-of-clinical-pharmacology
 Item: https://www-drini.archive.org/details/sim_journal-of-communication_autumn-1993_43_4?admin=1
 
 - **e24** — _Acknowledgment_  
-  - position: `n192` to `n200` (printed pp. [['191', '199']])  
+  - position: `n192` to `n199` (printed pp. [['191', '198']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_journal-of-communication_autumn-1993_43_4/page/n192/mode/1up?admin=1
@@ -467,7 +458,7 @@ Item: https://www-drini.archive.org/details/sim_journal-of-obstetric-gynecologic
 Item: https://www-drini.archive.org/details/sim_physician-and-sportsmedicine_1983-03_11_3?admin=1
 
 - **e20** — _Is Excessive Sweating Healthy?_  
-  - position: `n196` to `n198` (printed pp. [['195', '195']])  
+  - position: `n196` to `n196` (printed pp. [['195', '195']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_physician-and-sportsmedicine_1983-03_11_3/page/n196/mode/1up?admin=1
@@ -476,7 +467,7 @@ Item: https://www-drini.archive.org/details/sim_physician-and-sportsmedicine_198
 Item: https://www-drini.archive.org/details/sim_psychology-in-the-schools_1986-04_23_2?admin=1
 
 - **e19** — _Books received recently_  
-  - position: `n110` to `n116` (printed pp. [['223', '223']])  
+  - position: `n110` to `n115` (printed pp. [['223', '223']])  
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_psychology-in-the-schools_1986-04_23_2/page/n110/mode/1up?admin=1
