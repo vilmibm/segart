@@ -7,6 +7,7 @@ PAGE CATEGORIES:
 - abstracts: compact summaries of article titles
 - correspondence_letters
 - list_of_references
+- chapter
 - other (cover, ads, imprint, product information, pharmaceutical prescription, clinical information sheet, jobs, blank, reviews)
 
 ALWAYS FOLLOW THE RULES:
@@ -18,6 +19,7 @@ ALWAYS FOLLOW THE RULES:
 - if it is a table of contents, extract all listed article titles and their page numbers
 - use "n/a" if page number is not available
 - if the page contains manufacturer AND product information, it's likely to be an ad (category: other)
+- if an article page just contains title and author, classify it as "chapter"
 
 JSON OUTPUT FORMAT (output only JSON, no markdown fences, no commentary):
 {
