@@ -10,7 +10,7 @@ import json
 
 # Segart release version. Bump on user-facing schema or behavioral change.
 # Goes into every produced metadata file as the stable identifier.
-SEGART_VERSION = "1.0.0"
+SEGART_VERSION = "1.0.1"
 
 
 def software_versions(extra: dict = None) -> dict:
