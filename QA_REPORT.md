@@ -1,11 +1,11 @@
 # QA Review: heurxref Pilot Batch
 
-Generated 2026-05-11 17:42 — **49** items published, **15** entries flagged across **12** items.
+Generated 2026-05-12 18:26 — **149** items published, **57** entries flagged across **45** items.
 
 ## Flag breakdown
 
-- **co-located**: 7 — multiple Crossref entries share a start page-index AND title (typically end-of-issue announcements, repeated-title book reviews, or front-matter pairs).
-- **extended-to-end**: 8 — last entry whose Crossref deposit was a single start page; span extended to end of visible pages.
+- **co-located**: 26 — multiple Crossref entries share a start page-index AND title (typically end-of-issue announcements, repeated-title book reviews, or front-matter pairs).
+- **extended-to-end**: 31 — last entry whose Crossref deposit was a single start page; span extended to end of visible pages.
 
 ## How to QA each entry
 
@@ -15,6 +15,140 @@ Generated 2026-05-11 17:42 — **49** items published, **15** entries flagged ac
 4. If our range is wrong, edit `tmp/audit/pilot_<item>/<item>_toc.json` and re-publish.
 
 ## Entries
+
+### `sim_accident-analysis-and-prevention_1989-08_21_4_0`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-08_21_4_0?admin=1
+
+- **e17** — _Ger mer cykeltrafik bättre städer?_  
+  - position: `n104` to `n104` (printed pp. [['405', '405']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-08_21_4_0/page/n104/mode/1up?admin=1
+- **e19** — _Epidemiology and radiation protection_  
+  - position: `n106` to `n106` (printed pp. [['407', '407']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-08_21_4_0/page/n106/mode/1up?admin=1
+- **e23** — _Forthcoming papers_  
+  - position: `n112` to `n125` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-08_21_4_0/page/n112/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_1989-10_21_5_0`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-10_21_5_0?admin=1
+
+- **e10** — _Forthcoming papers_  
+  - position: `n98` to `n109` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-10_21_5_0/page/n98/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_1991-10_23_5_0`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1991-10_23_5_0?admin=1
+
+- **e17** — _A casual analysis of large vehicle accidents through Fault Tree Analysis and statistcal modelling_  
+  - position: `n133` to `n133` (printed pp. [['470', '470']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1991-10_23_5_0/page/n133/mode/1up?admin=1
+- **e18** — _Growth in vehicle populations and motor vehicle related fatality rates in developing countries_  
+  - position: `n133` to `n133` (printed pp. [['470', '470']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1991-10_23_5_0/page/n133/mode/1up?admin=1
+- **e19** — _Traffic-related mortality in the United States, 1968–1984: Epidemiologic analysis with an emphasis on traffic mode mix. Fehr, Rainer, Ph.D. University of California, Berkeley, 1989. 289 pp. Order Number DA9006320_  
+  - position: `n134` to `n134` (printed pp. [['471', '471']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1991-10_23_5_0/page/n134/mode/1up?admin=1
+- **e20** — _Modelling freeway interchange accidents_  
+  - position: `n134` to `n134` (printed pp. [['471', '471']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1991-10_23_5_0/page/n134/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_1992-04_24_2_0`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-04_24_2_0?admin=1
+
+- **e14** — _Accident prevention for hotels, motels and restaurants_  
+  - position: `n110` to `n110` (printed pp. [['213', '213']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-04_24_2_0/page/n110/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_1993-02_25_1`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-02_25_1?admin=1
+
+- **e16** — _Sleep, sleepiness and performance._  
+  - position: `n109` to `n109` (printed pp. [['106', '106']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-02_25_1/page/n109/mode/1up?admin=1
+- **e17** — _Truck driver behaviour and perceptions study. Final report._  
+  - position: `n109` to `n109` (printed pp. [['106', '106']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-02_25_1/page/n109/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_1993-12_25_6`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-12_25_6?admin=1
+
+- **e19** — _Author index volume 25, 1993_  
+  - position: `n154` to `n154` (printed pp. [['XIII', 'XIII']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-12_25_6/page/n154/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_1994-02_26_1`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1994-02_26_1?admin=1
+
+- **e16** — _Accuracy in traffic safety_  
+  - position: `n132` to `n132` (printed pp. [['129', '129']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1994-02_26_1/page/n132/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_1999-09_31_5`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1999-09_31_5?admin=1
+
+- **e18** — _Cellular telephone use and fatal traffic collisions: a commentary_  
+  - position: `n186` to `n188` (printed pp. [['599', '599']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1999-09_31_5/page/n186/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_2000-05_32_3_0`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2000-05_32_3_0?admin=1
+
+- **e20** — _Erratum to “Injury surveillance in Victoria, Australia: developing comprehensive injury incidence estimates”[Accident Analysis and Prevention 32 (2), 277–286]_  
+  - position: `n146` to `n152` (printed pp. [['471', '471']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2000-05_32_3_0/page/n146/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_2003-01_35_1_0`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2003-01_35_1_0?admin=1
+
+- **e17** — _Research in Transportation Economics_  
+  - position: `n160` to `n163` (printed pp. [['151', '151']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2003-01_35_1_0/page/n160/mode/1up?admin=1
+
+### `sim_accident-analysis-and-prevention_2004-01_36_1_0`
+Item: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2004-01_36_1_0?admin=1
+
+- **e2** — _Publisher's note_  
+  - position: `n5` to `n5` (printed pp. [['1', '1']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2004-01_36_1_0/page/n5/mode/1up?admin=1
+- **e3** — _Publisher's note_  
+  - position: `n5` to `n5` (printed pp. [['1', '1']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2004-01_36_1_0/page/n5/mode/1up?admin=1
 
 ### `sim_american-journal-of-sports-medicine_march-april-1989_17_2`
 Item: https://www-drini.archive.org/details/sim_american-journal-of-sports-medicine_march-april-1989_17_2?admin=1
@@ -53,6 +187,196 @@ Item: https://www-drini.archive.org/details/sim_ans_1990-09_13_1?admin=1
   - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
   - view: https://www-drini.archive.org/details/sim_ans_1990-09_13_1/page/n92/mode/1up?admin=1
 
+### `sim_applied-acoustics_2008-06_69_6_0`
+Item: https://www-drini.archive.org/details/sim_applied-acoustics_2008-06_69_6_0?admin=1
+
+- **e11** — _Calendar_  
+  - position: `n106` to `n111` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_applied-acoustics_2008-06_69_6_0/page/n106/mode/1up?admin=1
+
+### `sim_applied-acoustics_2010-07_71_7`
+Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-07_71_7?admin=1
+
+- **e13** — _Corrigendum to “Measurement of resonance frequency and loss factor of a microphone diaphragm using a laser vibrometer” [Appl. Acoust. 71 (2010) 258–261]_  
+  - position: `n103` to `n104` (printed pp. [['681', '681']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_applied-acoustics_2010-07_71_7/page/n103/mode/1up?admin=1
+
+### `sim_applied-acoustics_2010-11_71_11`
+Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-11_71_11?admin=1
+
+- **e18** — _Calendar_  
+  - position: `n128` to `n132` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_applied-acoustics_2010-11_71_11/page/n128/mode/1up?admin=1
+
+### `sim_applied-acoustics_2010-12_71_12`
+Item: https://www-drini.archive.org/details/sim_applied-acoustics_2010-12_71_12?admin=1
+
+- **e13** — _Calendar_  
+  - position: `n108` to `n112` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_applied-acoustics_2010-12_71_12/page/n108/mode/1up?admin=1
+
+### `sim_applied-acoustics_applied-acoustics_2013-01_74_1`
+Item: https://www-drini.archive.org/details/sim_applied-acoustics_applied-acoustics_2013-01_74_1?admin=1
+
+- **e27** — _Calendar_  
+  - position: `n228` to `n233` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_applied-acoustics_applied-acoustics_2013-01_74_1/page/n228/mode/1up?admin=1
+
+### `sim_applied-geochemistry_1998-01_13_1_0`
+Item: https://www-drini.archive.org/details/sim_applied-geochemistry_1998-01_13_1_0?admin=1
+
+- **e1** — _Editorial_  
+  - position: `n4` to `n4` (printed pp. [['iii', 'iii']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_applied-geochemistry_1998-01_13_1_0/page/n4/mode/1up?admin=1
+- **e2** — _Editorial Board_  
+  - position: `n4` to `n4` (printed pp. [['CO2', 'CO2']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_applied-geochemistry_1998-01_13_1_0/page/n4/mode/1up?admin=1
+
+### `sim_applied-geochemistry_2005-06_20_6`
+Item: https://www-drini.archive.org/details/sim_applied-geochemistry_2005-06_20_6?admin=1
+
+- **e15** — _Papers to Appear in Forthcoming Issues_  
+  - position: `n196` to `n202` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_applied-geochemistry_2005-06_20_6/page/n196/mode/1up?admin=1
+
+### `sim_applied-geochemistry_2006-09_21_9`
+Item: https://www-drini.archive.org/details/sim_applied-geochemistry_2006-09_21_9?admin=1
+
+- **e11** — _Papers to Appear in Forthcoming Issues_  
+  - position: `n178` to `n184` (printed pp. [['I', 'I']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_applied-geochemistry_2006-09_21_9/page/n178/mode/1up?admin=1
+
+### `sim_arts-in-psychotherapy_1996_23_2_0`
+Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_1996_23_2_0?admin=1
+
+- **e15** — _Call for papers_  
+  - position: `n96` to `n102` (printed pp. [['193', '193']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_1996_23_2_0/page/n96/mode/1up?admin=1
+
+### `sim_arts-in-psychotherapy_2006_33_5`
+Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2006_33_5?admin=1
+
+- **e13** — _Guide for Authors_  
+  - position: `n106` to `n108` (printed pp. [['472', '472']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2006_33_5/page/n106/mode/1up?admin=1
+
+### `sim_arts-in-psychotherapy_2010-02_37_1`
+Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-02_37_1?admin=1
+
+- **e12** — _Book review_  
+  - position: `n73` to `n73` (printed pp. [['70', '70']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-02_37_1/page/n73/mode/1up?admin=1
+- **e16** — _Acknowledgement to Reviewers 2009_  
+  - position: `n90` to `n96` (printed pp. [['87', '87']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-02_37_1/page/n90/mode/1up?admin=1
+
+### `sim_arts-in-psychotherapy_2010-09_37_4`
+Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-09_37_4?admin=1
+
+- **e9** — _Book review_  
+  - position: `n59` to `n59` (printed pp. [['340', '340']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-09_37_4/page/n59/mode/1up?admin=1
+
+### `sim_arts-in-psychotherapy_the-arts-in-psychotherapy_2013-09_40_4`
+Item: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_the-arts-in-psychotherapy_2013-09_40_4?admin=1
+
+- **e1** — _Editorial Board_  
+  - position: `n6` to `n6` (printed pp. [['CO2', 'CO2']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_arts-in-psychotherapy_the-arts-in-psychotherapy_2013-09_40_4/page/n6/mode/1up?admin=1
+
+### `sim_biological-conservation_2004-11_120_1_0`
+Item: https://www-drini.archive.org/details/sim_biological-conservation_2004-11_120_1_0?admin=1
+
+- **e9** — _Ecological niches – linking classical and contemporary approaches_  
+  - position: `n154` to `n163` (printed pp. [['151', '151']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_biological-conservation_2004-11_120_1_0/page/n154/mode/1up?admin=1
+
+### `sim_biological-conservation_2010-01_143_1`
+Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-01_143_1?admin=1
+
+- **e25** — _Book review_  
+  - position: `n262` to `n274` (printed pp. [['265', '265']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-01_143_1/page/n262/mode/1up?admin=1
+
+### `sim_biological-conservation_2010-02_143_2`
+Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-02_143_2?admin=1
+
+- **e18** — _Book review_  
+  - position: `n271` to `n272` (printed pp. [['532', '532']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-02_143_2/page/n271/mode/1up?admin=1
+
+### `sim_biological-conservation_2010-03_143_3`
+Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-03_143_3?admin=1
+
+- **e18** — _Book review_  
+  - position: `n301` to `n306` (printed pp. [['824', '824']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-03_143_3/page/n301/mode/1up?admin=1
+
+### `sim_biological-conservation_2010-04_143_4`
+Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-04_143_4?admin=1
+
+- **e13** — _Book review_  
+  - position: `n211` to `n211` (printed pp. [['1032', '1032']])  
+  - flag: **co-located** (confidence 0.4)  
+  - Multiple Crossref entries share this start page-index. Each kept at 1 page; verify whether boundaries should differ.  
+  - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-04_143_4/page/n211/mode/1up?admin=1
+
+### `sim_biological-conservation_2010-07_143_7`
+Item: https://www-drini.archive.org/details/sim_biological-conservation_2010-07_143_7?admin=1
+
+- **e15** — _Book review_  
+  - position: `n265` to `n268` (printed pp. [['1826', '1826']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_biological-conservation_2010-07_143_7/page/n265/mode/1up?admin=1
+
+### `sim_biological-conservation_biological-conservation_2013-06_162`
+Item: https://www-drini.archive.org/details/sim_biological-conservation_biological-conservation_2013-06_162?admin=1
+
+- **e8** — _Conservation Science and Practice_  
+  - position: `n136` to `n139` (printed pp. [['133', '133']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_biological-conservation_biological-conservation_2013-06_162/page/n136/mode/1up?admin=1
+
 ### `sim_canadian-entomologist_1981-08_113_8`
 Item: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_113_8?admin=1
 
@@ -61,6 +385,24 @@ Item: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_11
   - flag: **extended-to-end** (confidence 0.4)  
   - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
   - view: https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_113_8/page/n113/mode/1up?admin=1
+
+### `sim_clinical-biomechanics_2010-06_25_5`
+Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-06_25_5?admin=1
+
+- **e20** — _Announcement_  
+  - position: `n121` to `n124` (printed pp. [['504', '504']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-06_25_5/page/n121/mode/1up?admin=1
+
+### `sim_clinical-biomechanics_2010-08_25_7`
+Item: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-08_25_7?admin=1
+
+- **e21** — _Corrigendum to “Sagittal plane knee joint moments following anterior cruciate ligament injury and reconstruction; A Systematic Review” [Clinical Biomechanics 25 (2010) 277–283]_  
+  - position: `n135` to `n136` (printed pp. [['749', '749']])  
+  - flag: **extended-to-end** (confidence 0.4)  
+  - Last entry whose Crossref deposit was a single start page; span extended to end of visible pages (may over-claim trailing backmatter).  
+  - view: https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-08_25_7/page/n135/mode/1up?admin=1
 
 ### `sim_clinical-journal-of-sport-medicine_1999-07_9_3`
 Item: https://www-drini.archive.org/details/sim_clinical-journal-of-sport-medicine_1999-07_9_3?admin=1
@@ -141,19 +483,119 @@ Item: https://www-drini.archive.org/details/sim_psychology-in-the-schools_1986-0
 
 ## All published items
 
-49 items have segart `_toc.json` + `_articles.json.gz` + `_docling.json.gz` + review on IA.
+149 items have segart `_toc.json` + `_articles.json.gz` + `_docling.json.gz` + review on IA.
 
 - https://www-drini.archive.org/details/sim_academy-of-management-review_2000-10_25_4?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-02_21_1_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-08_21_4_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1989-10_21_5_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1991-08_23_4?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1991-10_23_5_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-02_24_1_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-04_24_2_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-06_24_3?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-06_24_3_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-08_24_4_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-10_24_5_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-12_24_6?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1992-12_24_6_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-02_25_1?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-04_25_2_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1993-12_25_6?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1994-02_26_1?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1995-06_27_3_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1996-01_28_1?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1996-07_28_4_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1997-05_29_3?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1997-07_29_4?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1998-01_30_1_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1998-05_30_3_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1998-07_30_4?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1999-07_31_4?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_1999-09_31_5?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2000-05_32_3_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2000-07_32_4_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2002-05_34_3_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2002-09_34_5_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2003-01_35_1_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2003-03_35_2_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2003-11_35_6_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2004-01_36_1_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2004-03_36_2_0?admin=1
+- https://www-drini.archive.org/details/sim_accident-analysis-and-prevention_2006-07_38_4_0?admin=1
 - https://www-drini.archive.org/details/sim_acta-radiologica_2005-10_46_6?admin=1
+- https://www-drini.archive.org/details/sim_advanced-drug-delivery-reviews_1996-05-22_19_2?admin=1
 - https://www-drini.archive.org/details/sim_advanced-drug-delivery-reviews_1997-01-15_23_1-3?admin=1
+- https://www-drini.archive.org/details/sim_advanced-drug-delivery-reviews_2003-08-28_55_8?admin=1
+- https://www-drini.archive.org/details/sim_aggression-and-violent-behavior_march-april-2005_10_3_0?admin=1
+- https://www-drini.archive.org/details/sim_aggression-and-violent-behavior_may-june-2003_8_3?admin=1
+- https://www-drini.archive.org/details/sim_aggression-and-violent-behavior_september-october-2002_7_5_0?admin=1
+- https://www-drini.archive.org/details/sim_aggression-and-violent-behavior_spring-1997_2_1_0?admin=1
+- https://www-drini.archive.org/details/sim_alcohol_2010-02_44_1?admin=1
+- https://www-drini.archive.org/details/sim_alcohol_july-august-1990_7_4_0?admin=1
 - https://www-drini.archive.org/details/sim_american-journal-of-sports-medicine_march-april-1989_17_2?admin=1
 - https://www-drini.archive.org/details/sim_annual-review-of-psychology_2015_66?admin=1
 - https://www-drini.archive.org/details/sim_ans_1978-10_1_1?admin=1
 - https://www-drini.archive.org/details/sim_ans_1990-09_13_1?admin=1
 - https://www-drini.archive.org/details/sim_aphasiology_july-october-1991_5_4-5?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_1988_25_3?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_2002-05_63_5?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_2007-05_68_5?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_2008-06_69_6_0?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_2010-07_71_7?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_2010-11_71_11?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_2010-12_71_12?admin=1
+- https://www-drini.archive.org/details/sim_applied-acoustics_applied-acoustics_2013-01_74_1?admin=1
+- https://www-drini.archive.org/details/sim_applied-geochemistry_1998-01_13_1_0?admin=1
+- https://www-drini.archive.org/details/sim_applied-geochemistry_2005-06_20_6?admin=1
+- https://www-drini.archive.org/details/sim_applied-geochemistry_2006-09_21_9?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_1996_23_2_0?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2000_27_3_0?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2006_33_5?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-02_37_1?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-04_37_2?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-07_37_3?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-09_37_4?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_2010-11_37_5?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_fall-1986_13_3?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_the-arts-in-psychotherapy_2013-02_40_1?admin=1
+- https://www-drini.archive.org/details/sim_arts-in-psychotherapy_the-arts-in-psychotherapy_2013-09_40_4?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_1990_51_1?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_1997-04_80_1?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2001-08_100_2?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2003-08_112_3?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2004-06_117_5?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2004-08_118_5?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2004-11_120_1_0?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-01_143_1?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-02_143_2?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-03_143_3?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-04_143_4?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-05_143_5?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-07_143_7?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-08_143_8?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-09_143_9?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-10_143_10?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-11_143_11?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_2010-12_143_12?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_biological-conservation_2013-06_162?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_biological-conservation_2013-07_163?admin=1
+- https://www-drini.archive.org/details/sim_biological-conservation_biological-conservation_2013-10_166?admin=1
 - https://www-drini.archive.org/details/sim_canadian-entomologist_1981-08_113_8?admin=1
+- https://www-drini.archive.org/details/sim_cement-and-concrete-research_1993-01_23_1_0?admin=1
 - https://www-drini.archive.org/details/sim_child-abuse-neglect_1995-05_19_5_0?admin=1
+- https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-01_25_1?admin=1
+- https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-06_25_5?admin=1
+- https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-07_25_6?admin=1
+- https://www-drini.archive.org/details/sim_clinical-biomechanics_2010-08_25_7?admin=1
 - https://www-drini.archive.org/details/sim_clinical-journal-of-sport-medicine_1999-07_9_3?admin=1
+- https://www-drini.archive.org/details/sim_clinics-in-chest-medicine_2010-06_31_2?admin=1
+- https://www-drini.archive.org/details/sim_clinics-in-chest-medicine_2010-09_31_3?admin=1
+- https://www-drini.archive.org/details/sim_clinics-in-chest-medicine_2010-12_31_4?admin=1
+- https://www-drini.archive.org/details/sim_clinics-in-perinatology_2010-03_37_1?admin=1
+- https://www-drini.archive.org/details/sim_clinics-in-perinatology_2010-06_37_2?admin=1
+- https://www-drini.archive.org/details/sim_clinics-in-perinatology_2010-09_37_3?admin=1
+- https://www-drini.archive.org/details/sim_clinics-in-perinatology_2010-12_37_4?admin=1
 - https://www-drini.archive.org/details/sim_clinics-in-sports-medicine_1994-04_13_2?admin=1
 - https://www-drini.archive.org/details/sim_clinics-in-sports-medicine_2000-04_19_2?admin=1
 - https://www-drini.archive.org/details/sim_european-journal-of-personality_1987-09_1_3?admin=1

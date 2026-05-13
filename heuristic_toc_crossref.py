@@ -176,7 +176,16 @@ def fetch_crossref_full(issn, year, vol, iss):
 
 
 def derive_metadata(item):
-    """Walk ILL CSVs for first usable (issn, year, vol, iss) for this item."""
+    """Walk ILL CSVs for first usable (issn, year, vol, iss) for this item.
+
+    Falls back to IA item metadata (`ia metadata <item>`) when ILL doesn't
+    have the row, OR when ILL is missing the issue number — some journals
+    publish annual volumes without per-issue subdivisions (Biological
+    Conservation, Annual Reviews, etc.), and Crossref deposits leave
+    `issue` empty for those. In that case the (issn, year, vol) tuple is
+    sufficient; `iss=""` gets matched against Crossref's empty issue
+    label by `_label_matches`.
+    """
     import csv, glob
     from parse_cover_text import parse as parse_cover
     ISSN_RE = re.compile(r"^\d{4}-?\d{3}[\dXx]$")
@@ -198,8 +207,26 @@ def derive_metadata(item):
                     vol = vol or (cv.get("volume") or "").strip()
                     iss = iss or (cv.get("issue") or "").strip()
                     yr = yr or (cv.get("year") or "").strip()
-                if issn and ISSN_RE.match(issn) and vol and iss and yr:
+                if issn and ISSN_RE.match(issn) and vol and yr:
                     return issn, yr[:4], vol, iss
+
+    # ILL didn't have a usable row; fall back to IA item metadata.
+    try:
+        url = f"https://archive.org/metadata/{item}/metadata"
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=15) as fh:
+            md = json.load(fh).get("result") or {}
+    except Exception:
+        return None
+    issn = (md.get("issn") or "").strip()
+    if isinstance(issn, list): issn = issn[0] if issn else ""
+    vol = (md.get("volume") or "").strip()
+    iss = (md.get("issue") or "").strip()
+    # IA date can be "YYYY", "YYYY-MM", or "YYYY-MM-DD"
+    date = (md.get("date") or md.get("year") or "").strip()
+    yr = date[:4] if date else ""
+    if issn and ISSN_RE.match(issn) and vol and yr:
+        return issn, yr, vol, iss
     return None
 
 
