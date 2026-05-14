@@ -393,6 +393,231 @@ def _split_printed_range(s):
     return [[s, s]]
 
 
+def _build_case_insensitive_printed_map(item):
+    """Build {lowercase_pageNumber → BR_page_index} from both
+    scandata.xml assertions (authoritative) and pn.json (OCR-derived).
+    Used to resolve roman-numeral/letter page values that pn.json's
+    case-sensitive `printed_to_br` map can't find."""
+    out = {}
+    if not item: return out
+    try:
+        from page_index import PageIndex
+        pi = PageIndex.for_item(item, fetch=True)
+    except Exception:
+        return out
+    # Scandata assertions (operator-authored, most authoritative)
+    sd = SEGART / "tmp" / "items" / item / f"{item}_scandata.xml"
+    if sd.exists():
+        try:
+            import xml.etree.ElementTree as ET
+            for a in ET.parse(sd).getroot().iter("assertion"):
+                l = a.find("leafNum"); pn = a.find("pageNum")
+                if l is None or l.text is None or pn is None: continue
+                page_str = (pn.text or "").strip().lower()
+                if not page_str: continue
+                try: leaf = int(l.text.strip())
+                except ValueError: continue
+                br = pi.scandata_to_br(leaf)
+                if br is None: br = leaf
+                out.setdefault(page_str, br)
+        except Exception: pass
+    # pn.json (OCR), case-insensitive
+    pn_path = SEGART / "tmp" / "items" / item / f"{item}_page_numbers.json"
+    if pn_path.exists():
+        try:
+            pn_data = json.load(open(pn_path))
+            for row in pn_data.get("pages", []) or []:
+                page_str = (row.get("pageNumber") or "").strip().lower()
+                if not page_str: continue
+                leaf = row.get("leafNum")
+                if leaf is None: continue
+                br = pi.scandata_to_br(leaf)
+                if br is None: br = leaf
+                out.setdefault(page_str, br)
+        except Exception: pass
+    return out
+
+
+def _split_crossref_page(cp):
+    """'iii' → ('iii','iii'); 'v-viii' → ('v','viii'); 'IFC' → ('ifc','ifc')."""
+    if not cp: return None, None
+    cp = cp.strip()
+    m = re.match(r"^([A-Za-z0-9]+)\s*[-\u2013]\s*([A-Za-z0-9]+)$", cp)
+    if m: return m.group(1).lower(), m.group(2).lower()
+    m = re.match(r"^([A-Za-z0-9]+)$", cp)
+    if m: return m.group(1).lower(), m.group(1).lower()
+    return None, None
+
+
+def _resolve_via_hocr_margins(p_start, p_end, item, first_article_pi):
+    """Scan hOCR text for the printed page string (e.g. "iii") in the
+    top or bottom margins of front-matter leaves. The hOCR has all
+    OCR'd tokens; page numbers usually sit alone in a margin region."""
+    if not item: return None
+    pix_path = SEGART / "tmp" / "items" / item / f"{item}_hocr_pageindex.json.gz"
+    st_path = SEGART / "tmp" / "items" / item / f"{item}_hocr_searchtext.txt.gz"
+    if not pix_path.exists() or not st_path.exists(): return None
+    try:
+        idx = json.load(gzip.open(pix_path))
+        with gzip.open(st_path, "rb") as fh:
+            full_text = fh.read().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    front_limit_leaf = first_article_pi if first_article_pi is not None else len(idx)
+    target = p_start.lower()
+    # Find leaves whose searchtext contains the target as a standalone token
+    pat = re.compile(r"\b" + re.escape(target) + r"\b", re.IGNORECASE)
+    hits = []
+    for leaf in range(min(len(idx), front_limit_leaf + 5)):
+        st_s, st_e, _, _ = idx[leaf]
+        chunk = full_text[st_s:st_e]
+        # Look only in first/last 200 chars (top/bottom margin proxy)
+        edges = chunk[:200] + " " + chunk[-200:]
+        if pat.search(edges):
+            hits.append(leaf)
+    if not hits: return None
+    # Take first hit (front-matter ordering — earliest is correct for roman pages)
+    start_leaf = hits[0]
+    end_leaf = start_leaf
+    if p_end and p_end != p_start:
+        for leaf in hits[1:]:
+            chunk = full_text[idx[leaf][0]:idx[leaf][1]]
+            if re.search(r"\b"+re.escape(p_end.lower())+r"\b", chunk[:200]+" "+chunk[-200:], re.IGNORECASE):
+                end_leaf = leaf; break
+    try:
+        from page_index import PageIndex
+        pi = PageIndex.for_item(item, fetch=True)
+        br_s = pi.scandata_to_br(start_leaf) or start_leaf
+        br_e = pi.scandata_to_br(end_leaf) or end_leaf
+        return (br_s, br_e)
+    except Exception:
+        return (start_leaf, end_leaf)
+
+
+def _resolve_unplaced_entry(entry, item, first_article_pi):
+    """Locate a Crossref entry whose printed page (e.g. "iii", "IFC",
+    "v-viii") wasn't mapped by heuristic_toc_crossref. Priority:
+      A. scandata assertions + pn.json case-insensitive lookup.
+      B. docling section_header title match.
+      C. hOCR margin scan for the printed-page string.
+    Returns (start_br, end_br) or None.
+    """
+    if not item: return None
+    cp = entry.get("crossref_page") or ""
+    p_start, p_end = _split_crossref_page(cp)
+
+    # Strategy A: case-insensitive lookup of scandata + pn.json
+    if p_start:
+        ci_map = _build_case_insensitive_printed_map(item)
+        s_br = ci_map.get(p_start)
+        e_br = ci_map.get(p_end) if p_end else None
+        if s_br is not None:
+            if e_br is None: e_br = s_br
+            return (s_br, e_br)
+
+    # Strategy B: docling section_header title match
+    title = (entry.get("title") or "").strip()
+    if title:
+        p = DOCLING_CACHE / item / f"{item}_docling.json.gz"
+        if p.exists():
+            try:
+                with gzip.open(p, "rt", encoding="utf-8") as fh:
+                    doc = json.load(fh)
+                target = set(re.findall(r"[a-z0-9]+", title.lower()))
+                # Drop only the most generic stop-words; KEEP descriptive
+                # words like "contents", "table", "board", "preface" since
+                # they're often the only meaningful tokens in front-matter
+                # entry titles ("Contents", "Editorial Board", "Preface").
+                target = {t for t in target if len(t) >= 3 and t not in
+                          {"the","and","for","with","page","pages","from","into"}}
+                if target:
+                    front_limit_doc = (first_article_pi + 1) if first_article_pi is not None else None
+                    best = None; best_score = 0
+                    for t in doc.get("texts") or []:
+                        if t.get("label") not in ("title", "section_header"): continue
+                        pr = t.get("prov") or []
+                        if not pr: continue
+                        pn = pr[0].get("page_no")
+                        if pn is None: continue
+                        if front_limit_doc is not None and pn > front_limit_doc: break
+                        txt_toks = set(re.findall(r"[a-z0-9]+", (t.get("text") or "").lower()))
+                        if not txt_toks: continue
+                        hits = target & txt_toks
+                        if not hits: continue
+                        score = len(hits) / max(len(target), 1)
+                        if score > best_score and score >= 0.5:
+                            best = pn; best_score = score
+                    if best is not None:
+                        from page_index import PageIndex
+                        pi = PageIndex.for_item(item, fetch=True)
+                        leaf = best - 1
+                        br = pi.scandata_to_br(leaf) or leaf
+                        return (br, br)
+            except Exception:
+                pass
+
+    # Strategy C: hOCR margin scan for the printed-page string
+    if p_start:
+        res = _resolve_via_hocr_margins(p_start, p_end, item, first_article_pi)
+        if res: return res
+
+    # Strategy D: hOCR title-word scan across front-matter leaves.
+    # Catches cases where docling didn't label a section_header but OCR
+    # picked up the title text on the page (e.g., "EDITORIAL BOARD" header
+    # exists as plain text without a `section_header` label).
+    if title:
+        res = _resolve_via_hocr_title_scan(title, item, first_article_pi)
+        if res: return res
+
+    return None
+
+
+def _resolve_via_hocr_title_scan(title, item, first_article_pi):
+    """Search front-matter leaves' hOCR text for the entry title's
+    meaningful tokens. The leaf with the highest density of title tokens
+    in its top portion is the article start."""
+    if not item or not title: return None
+    pix_path = SEGART / "tmp" / "items" / item / f"{item}_hocr_pageindex.json.gz"
+    st_path = SEGART / "tmp" / "items" / item / f"{item}_hocr_searchtext.txt.gz"
+    if not pix_path.exists() or not st_path.exists(): return None
+    try:
+        idx = json.load(gzip.open(pix_path))
+        full_text = gzip.open(st_path, "rb").read().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    tt = set(re.findall(r"[a-z0-9]+", title.lower()))
+    tt = {t for t in tt if len(t) >= 3 and t not in
+           {"the","and","for","with","page","pages","from","into"}}
+    if not tt: return None
+    # Threshold scales with title length: short titles (Editorial Board,
+    # Masthead, Title Page) get a more permissive 1-hit threshold because
+    # their tokens are already few and specific.
+    threshold = 0.4 if len(tt) <= 2 else 0.5
+    # Scan only front-matter leaves (before first article) + small buffer
+    last_leaf = min(len(idx),
+                     (first_article_pi + 5) if first_article_pi is not None else 30)
+    best_leaf = None; best_score = 0
+    for leaf in range(last_leaf):
+        st_s, st_e, _, _ = idx[leaf]
+        chunk = full_text[st_s:st_e]
+        if not chunk: continue
+        # Score the top portion of the leaf — title words at top are stronger
+        top = chunk[:max(300, len(chunk)//3)]
+        top_toks = set(re.findall(r"[a-z0-9]+", top.lower()))
+        hits = tt & top_toks
+        score = len(hits) / max(len(tt), 1)
+        if score > best_score and score >= threshold:
+            best_leaf = leaf; best_score = score
+    if best_leaf is None: return None
+    try:
+        from page_index import PageIndex
+        pi = PageIndex.for_item(item, fetch=True)
+        br = pi.scandata_to_br(best_leaf) or best_leaf
+        return (br, br)
+    except Exception:
+        return (best_leaf, best_leaf)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("input", help="path to *_toc_heur_xref.json")
@@ -434,7 +659,61 @@ def main():
         # Read either v2 (`start_page_index`) or v1 (`start_leaf`).
         s_pi = e.get("start_page_index", e.get("start_leaf"))
         e_pi = e.get("end_page_index", e.get("end_leaf"))
-        if s_pi is None: continue
+        if s_pi is None:
+            # Frontmatter / backmatter entries that pn.json's digit-only OCR
+            # couldn't map (roman-numeral pages like "iii", "v-viii", "IFC",
+            # "fmi"). Preserve every Crossref entry.
+            resolved = _resolve_unplaced_entry(e, d.get("item",""),
+                                                first_entry_pi)
+            etype = _classify_entry_type(e.get("title"),
+                                          default=e.get("type") or "article")
+            if etype == "article":
+                # Unmapped roman-page entries are almost always front/back-matter.
+                etype = "frontmatter"
+            entry = {
+                "id": f"e{i+1}",
+                "type": etype,
+                "title": e.get("title") or "",
+                "authors": e.get("authors") or None,
+                "page_index_ranges": [],
+                "printed_pages": _split_printed_range(e.get("crossref_page")),
+                "ext_ids": {"doi": e["doi"]} if e.get("doi") else {},
+                "confidence": 0.2,
+                "evidence": ["crossref_page_unresolvable",
+                             (e.get("_method") or "failed")],
+                "level": 1,
+                "needs_qa": True,
+            }
+            if resolved is not None:
+                rs, re_ = resolved
+                entry["page_index_ranges"] = [[f"n{rs}", f"n{re_}"]]
+                entry["confidence"] = 0.4
+                entry["evidence"] = ["resolved_via_docling_or_hocr"]
+                entry.pop("needs_qa", None)
+            elif etype == "frontmatter" and first_entry_pi:
+                # Worst-case positional default: place anywhere in the
+                # front-matter region (leaf 0 to first known entry - 1).
+                # This still flags needs_qa so the librarian can pin it,
+                # but at least the entry has a usable BR range rather
+                # than empty `[]`.
+                entry["page_index_ranges"] = [["n0", f"n{first_entry_pi - 1}"]]
+                entry["evidence"] = ["frontmatter_positional_default"]
+                entry["confidence"] = 0.15
+            elif etype == "backmatter":
+                # Backmatter default: last leaves of the issue (use
+                # page_index_count if we have it, else skip).
+                try:
+                    from page_index import PageIndex
+                    pi = PageIndex.for_item(d.get("item",""), fetch=True)
+                    last = (pi.visible_count or 0) - 1
+                    if last > 0:
+                        entry["page_index_ranges"] = [[f"n{max(0,last-10)}", f"n{last}"]]
+                        entry["evidence"] = ["backmatter_positional_default"]
+                        entry["confidence"] = 0.15
+                except Exception:
+                    pass
+            legacy_entries.append(entry)
+            continue
         # heuristic_toc_crossref emits 0-indexed BookReader page-index
         # integers (via page_index.printed_to_br), which directly become
         # the legacy `nN` string. The LLM path uses docling page_no and
@@ -477,9 +756,16 @@ def main():
                   file=sys.stderr)
 
     def _start_pi(le):
-        return int(le["page_index_ranges"][0][0].lstrip("n"))
+        pr = le.get("page_index_ranges") or []
+        if not pr or not pr[0]: return None
+        return int(pr[0][0].lstrip("n"))
     def _end_pi(le):
-        return int(le["page_index_ranges"][0][1].lstrip("n"))
+        pr = le.get("page_index_ranges") or []
+        if not pr or not pr[0]: return None
+        return int(pr[0][1].lstrip("n"))
+
+    def _has_position(le):
+        return _start_pi(le) is not None
 
     # Cache docling printed→page-index map once (used for repeated-title
     # section-internal placement and for fall-through cases).
@@ -554,7 +840,9 @@ def main():
     if docling_pp_map:
         starts_to_idxs = {}
         for k, le in enumerate(legacy_entries):
-            starts_to_idxs.setdefault(_start_pi(le), []).append(k)
+            sp = _start_pi(le)
+            if sp is None: continue  # unplaced entry — skip
+            starts_to_idxs.setdefault(sp, []).append(k)
         for sl, ks in starts_to_idxs.items():
             if len(ks) < 2: continue
             titles = {(legacy_entries[k].get("title") or "").strip().lower()
@@ -576,7 +864,10 @@ def main():
                 le["confidence"] = 0.6
 
     # Re-sort after Pass A — relocations may have changed order.
-    sorted_idxs = sorted(range(len(legacy_entries)),
+    # Skip unplaced entries (no page_index_ranges) — they participate in
+    # the output but not in the span-inference logic.
+    sorted_idxs = sorted([j for j in range(len(legacy_entries))
+                           if _start_pi(legacy_entries[j]) is not None],
                           key=lambda j: _start_pi(legacy_entries[j]))
     inferred_count = 0
 
@@ -699,6 +990,7 @@ def main():
             ev = set(le.get("evidence") or [])
             if not (ev & INFERRED_EV): continue
             sl_e, el_e = _start_pi(le), _end_pi(le)
+            if sl_e is None or el_e is None: continue
             new_el = el_e
             while new_el > sl_e:
                 doc_pg = _pi_to_doc_page(new_el)
